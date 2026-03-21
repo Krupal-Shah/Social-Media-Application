@@ -1,0 +1,201 @@
+<!--  ChatGPT5.1, OpenAI, "Generate a html/css to show a follow button and details obout author",https://chatgpt.com/, 2026-02-28  -->
+{% load static %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="{% static 'base.css' %}" />
+    <link rel="stylesheet" href="{% static 'stream.css' %}" />
+    <script src="{% static 'entry_detail.min.js' %}" defer></script>
+    <title>Transparent &mdash; {{ author.display_name }}</title>
+  </head>
+  <body>
+    {% include "ui/_header.html" %}
+
+    <main class="feed-layout">
+      <!-- Profile Header -->
+      <div class="entry-card" style="padding: 24px; margin-bottom: 12px">
+        <div style="display: flex; align-items: center; gap: 20px">
+          <div
+            class="entry-card__avatar"
+            style="width: 72px; height: 72px; font-size: 2rem; flex-shrink: 0"
+          >
+            {% if author.profile_image %}
+            <img
+              src="{{ author.profile_image }}"
+              alt="{{ author.display_name }}"
+            />
+            {% else %}
+            <span>{{ author.display_name|first|upper }}</span>
+            {% endif %}
+          </div>
+          <div style="flex: 1">
+            <div
+              style="
+                font-size: 1.25rem;
+                font-weight: 700;
+                color: var(--text-primary);
+              "
+            >
+              {{ author.display_name }}
+            </div>
+            <div
+              style="
+                font-size: 0.8125rem;
+                color: var(--text-secondary);
+                margin-bottom: 12px;
+              "
+            >
+              @{{ author.username }}
+            </div>
+
+            {% if author.description %}
+            <div
+              style="
+                font-size: 0.875rem;
+                color: var(--text-primary);
+                margin-bottom: 8px;
+                white-space: pre-line;
+              "
+            >
+              {{ author.description }}
+            </div>
+            {% endif %} {% if author.github %}
+            <div style="margin-bottom: 12px">
+              <a
+                href="{{ author.github }}"
+                target="_blank"
+                rel="noopener"
+                style="
+                  font-size: 0.8125rem;
+                  color: #1877f2;
+                  text-decoration: none;
+                "
+              >
+                {{ author.github }}
+              </a>
+            </div>
+            {% endif %} {% if is_following %}
+            <form
+              method="post"
+              action="/authors/{{ author.pk }}/unfollow/"
+              style="display: inline"
+            >
+              {% csrf_token %}
+              <button
+                type="submit"
+                style="
+                  background: #e4e6eb;
+                  color: var(--text-primary);
+                  border: none;
+                  border-radius: 6px;
+                  padding: 7px 16px;
+                  font-size: 0.875rem;
+                  font-weight: 600;
+                  cursor: pointer;
+                "
+              >
+                Unfollow
+              </button>
+            </form>
+            {% elif has_pending %}
+            <button
+              disabled
+              style="
+                background: #e4e6eb;
+                color: var(--text-secondary);
+                border: none;
+                border-radius: 6px;
+                padding: 7px 16px;
+                font-size: 0.875rem;
+                font-weight: 600;
+                cursor: not-allowed;
+              "
+            >
+              Request Sent
+            </button>
+            {% else %}
+            <form
+              method="post"
+              action="/authors/{{ author.pk }}/follow/"
+              style="display: inline"
+            >
+              {% csrf_token %}
+              <button
+                type="submit"
+                style="
+                  background: #1877f2;
+                  color: white;
+                  border: none;
+                  border-radius: 6px;
+                  padding: 7px 16px;
+                  font-size: 0.875rem;
+                  font-weight: 600;
+                  cursor: pointer;
+                "
+              >
+                Follow
+              </button>
+            </form>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <!-- Public Entries -->
+      <h3
+        style="
+          font-size: 0.9375rem;
+          font-weight: 700;
+          color: var(--text-primary);
+          margin-bottom: 8px;
+        "
+      >
+        Public Posts
+      </h3>
+
+      {% for entry in entries %}
+      <article class="entry-card">
+        <div class="entry-card__header">
+          <div class="entry-card__avatar">
+            {% if author.profile_image %}
+            <img
+              src="{{ author.profile_image }}"
+              alt="{{ author.display_name }}"
+            />
+            {% else %}
+            <span>{{ author.display_name|first|upper }}</span>
+            {% endif %}
+          </div>
+          <div class="entry-card__meta">
+            <span class="entry-card__author">{{ author.display_name }}</span>
+            <span class="entry-card__date"
+              >{{ entry.published|timesince }} ago</span
+            >
+          </div>
+          <span
+            class="entry-card__visibility entry-card__visibility--{{ entry.visibility|lower }}"
+          >
+            {{ entry.visibility }}
+          </span>
+        </div>
+
+        {% if entry.title %}
+        <h2 class="entry-card__title">{{ entry.title }}</h2>
+        {% endif %}
+
+        <div class="entry-card__content">
+          <p class="entry-card__content-plain">
+            {{ entry.content|truncatechars:300 }}
+          </p>
+        </div>
+      </article>
+      {% empty %}
+      <div class="feed__empty">
+        <p>No public posts yet.</p>
+      </div>
+      {% endfor %}
+    </main>
+  </body>
+</html>

@@ -1,0 +1,433 @@
+{% extends "stream.html" %} {% load static %} {% block title %}
+{{request.user.display_name|default:request.user.username }} &mdash; Transparent
+{% endblock %} {% block extra_head %}
+<link rel="stylesheet" href="{% static 'profile.css' %}" />
+{% endblock %} {% block page_scripts %}
+<script src="{% static 'profile.min.js' %}" defer></script>
+{% endblock %} {% block main %}
+<main class="profile-page">
+  {% if messages %}
+  <div style="max-width: 935px; margin: 0 auto 12px; padding: 0 12px">
+    {% for message in messages %}
+    <div
+      style="
+        background: #fff0f0;
+        border: 1px solid #f5c2c2;
+        border-radius: 6px;
+        color: #c0392b;
+        font-size: 14px;
+        padding: 10px 14px;
+        margin-bottom: 8px;
+      "
+    >
+      {{ message }}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Header -->
+  <div class="profile-header">
+    <div class="profile-avatar-wrap">
+      <div class="profile-avatar-circle">
+        {% if request.user.profile_image %}
+        <img
+          src="{{ request.user.profile_image }}"
+          alt="{{ request.user.username }}"
+        />
+        {% else %}
+        <span>{{ request.user.username|first|upper }}</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="profile-info">
+      <div class="profile-username-row">
+        <span class="profile-username">{{ request.user.username }}</span>
+        <a
+          href="{% url 'edit_profile' %}"
+          class="overlay-btn overlay-btn--secondary"
+          style="text-decoration: none"
+        >
+          Edit profile
+        </a>
+      </div>
+
+      <div class="profile-stats">
+        <div class="profile-stat">
+          <strong>{{ entries|length }}</strong> posts
+        </div>
+        <div class="profile-stat">
+          <strong>{{ followers_count }}</strong> followers
+        </div>
+        <div class="profile-stat">
+          <strong>{{ following_count }}</strong> following
+        </div>
+      </div>
+
+      <div class="profile-display-name">
+        {{ request.user.display_name|default:request.user.username }}
+      </div>
+
+      {% if request.user.description %}
+      <div class="profile-bio">{{ request.user.description }}</div>
+      {% else %}
+      <div class="profile-bio">Welcome to my page.</div>
+      {% endif %} {% if request.user.github %}
+      <div class="profile-bio">
+        <a href="{{ request.user.github }}" target="_blank" rel="noopener">
+          {{ request.user.github }}
+        </a>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Follow Requests Button -->
+  {% if pending_count > 0 %}
+  <div style="max-width: 935px; margin: 0 auto 16px; padding: 0 12px;">
+    <a href="/profile/follow-requests/" style="display: flex; align-items: center; justify-content: space-between; background: #fff; border: 1px solid #dbdbdb; border-radius: 8px; padding: 14px 16px; text-decoration: none; color: #262626; transition: background 0.15s;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <svg viewBox="0 0 24 24" fill="#1877f2" style="width: 22px; height: 22px;">
+          <path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+        </svg>
+        <span style="font-size: 0.9375rem; font-weight: 600;">Follow Requests</span>
+        <span style="background: #e74c3c; color: white; font-size: 0.75rem; padding: 2px 8px; border-radius: 12px; font-weight: 700;">{{ pending_count }}</span>
+      </div>
+      <svg viewBox="0 0 24 24" fill="#8e8e8e" style="width: 20px; height: 20px;">
+        <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/>
+      </svg>
+    </a>
+  </div>
+  {% endif %}
+
+  <!-- Tab bar -->
+  <div class="profile-tabs">
+    <div class="profile-tab profile-tab--active">
+      <svg viewBox="0 0 24 24" fill="currentColor">
+        <path
+          d="M4 4h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 10h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 16h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4z"
+        />
+      </svg>
+      Posts
+    </div>
+  </div>
+
+  <!-- Grid -->
+  <div class="profile-grid">
+    {% for entry in entries %} {% with vis=entry.visibility|lower %}
+    <div
+      class="grid-cell"
+      data-id="{{ entry.id }}"
+      role="button"
+      tabindex="0"
+      aria-label="View post: {{ entry.title|default:'Untitled' }}"
+    >
+      {% if entry.display_has_gallery %}
+      <div class="grid-cell__gallery-badge" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <path
+            d="M2 6H0v5h.01L0 20c0 1.1.9 2 2 2h18v-2H2V6zm20-2h-8l-2-2H6c-1.1 0-1.99.9-1.99 2L4 16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-5 9l-5 3.19V13H7V9h5V5.81L17 9v4z"
+          />
+        </svg>
+      </div>
+      <div
+        class="grid-cell__text {% cycle 'tile-palette-0' 'tile-palette-1' 'tile-palette-2' 'tile-palette-3' 'tile-palette-4' 'tile-palette-5' 'tile-palette-6' 'tile-palette-7' %}"
+        data-gallery-thumb="1"
+        data-gallery="{{ entry.display_gallery_json|escape }}"
+        aria-hidden="true"
+      ></div>
+
+      {% elif entry.display_has_image %}
+      <img
+        class="grid-cell__img"
+        src="{{ entry.display_image_src }}"
+        alt="{{ entry.title|default:'Post image' }}"
+        loading="lazy"
+      />
+
+      {% else %} {% if entry.display_is_markdown %}
+      <div class="tile-md-badge" aria-hidden="true">MD</div>
+      {% endif %}
+      <div
+        class="grid-cell__text {% cycle 'tile-palette-0' 'tile-palette-1' 'tile-palette-2' 'tile-palette-3' 'tile-palette-4' 'tile-palette-5' 'tile-palette-6' 'tile-palette-7' %}"
+        aria-hidden="true"
+      >
+        <svg class="grid-cell__text-icon" viewBox="0 0 24 24">
+          <path
+            d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"
+          />
+        </svg>
+        {% if entry.title %}
+        <div class="grid-cell__text-title">{{ entry.title }}</div>
+        {% endif %}
+        <div class="grid-cell__text-body">
+          {{ entry.display_text|truncatechars:120 }}
+        </div>
+      </div>
+      {% endif %}
+
+      <span class="grid-cell__vis grid-cell__vis--{{ vis }}"
+        >{{ entry.visibility }}</span
+      >
+    </div>
+    {% endwith %} {% empty %}
+    <div class="profile-empty">
+      <svg viewBox="0 0 24 24">
+        <path
+          d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"
+        />
+      </svg>
+      <p>
+        No posts yet. Share something from the<br />
+        <a href="/" style="color: var(--primary); font-weight: 600">home feed</a
+        >.
+      </p>
+    </div>
+    {% endfor %}
+  </div>
+</main>
+
+<!-- Entry Overlay (slides from right) -->
+<div
+  class="entry-overlay"
+  id="entryOverlay"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="overlayTitle"
+>
+  <div class="entry-overlay__backdrop" id="overlayBackdrop"></div>
+  <div class="entry-overlay__panel" id="overlayPanel">
+    <div class="overlay-panel-header">
+      <h2 id="overlayTitle">Post</h2>
+      <button
+        class="overlay-close-btn"
+        id="overlayCloseBtn"
+        aria-label="Close panel"
+      >
+        <svg viewBox="0 0 24 24">
+          <path
+            d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+          />
+        </svg>
+      </button>
+    </div>
+
+    <div class="overlay-panel-body" id="overlayBody"></div>
+    <div class="overlay-panel-footer" id="overlayFooter"></div>
+  </div>
+</div>
+
+<!-- Hidden data -->
+<div style="display: none" id="entryStore">
+  {% for entry in entries %}
+  <div id="store-{{ entry.id }}" data-content-type="{{ entry.content_type }}">
+    <!-- view body -->
+    <div class="store-view-body">
+      <div class="overlay-view-meta">
+        <span
+          class="overlay-vis-badge js-view-visibility overlay-vis-badge--{{ entry.visibility|lower }}"
+          >{{ entry.visibility }}</span
+        >
+        <span class="overlay-date">{{ entry.published|date:"N j, Y" }}</span>
+      </div>
+
+      <div class="overlay-content-wrap">
+        <!-- Text first, image/gallery after (mirrors stream feed order) -->
+        <div
+          class="overlay-content-markdown js-view-markdown"
+          data-markdown="{% if entry.display_is_markdown %}{{ entry.display_text|escape }}{% endif %}"
+          style="display: none"
+        ></div>
+
+        <p class="overlay-content-plain js-view-plain" style="display: none">
+          {{ entry.display_text }}
+        </p>
+
+        <div
+          class="overlay-gallery js-view-gallery"
+          data-gallery="{{ entry.display_gallery_json|escape }}"
+          style="display: none"
+        ></div>
+
+        <img
+          class="overlay-content-image js-view-image"
+          src="{{ entry.display_image_src }}"
+          alt="{{ entry.title|default:'Post image' }}"
+          style="display: none"
+        />
+      </div>
+    </div>
+
+    <!-- view footer -->
+    <div class="store-view-footer">
+      {% if entry.visibility != "DELETED" %}
+      <a
+        href="/api/entries/{{ entry.id }}/"
+        class="overlay-btn overlay-btn--secondary"
+        target="_blank"
+      >
+        View / Copy Link
+      </a>
+      {% endif %}
+      <button
+        class="overlay-btn overlay-btn--primary"
+        data-action="edit"
+        data-id="{{ entry.id }}"
+      >
+        Edit Post
+      </button>
+
+      <form
+        method="post"
+        action="/api/entries/{{ entry.id }}/delete/"
+        style="display: inline"
+      >
+        {% csrf_token %}
+        <button
+          class="overlay-btn overlay-btn--danger"
+          data-action="delete"
+          data-id="{{ entry.id }}"
+        >
+          Delete Post
+        </button>
+      </form>
+    </div>
+
+    <!-- body  -->
+    <div class="store-edit-body" style="display: none">
+      <form
+        method="post"
+        action="/api/entries/{{ entry.id }}/edit/"
+        enctype="multipart/form-data"
+        id="edit-form-{{ entry.id }}"
+      >
+        {% csrf_token %}
+
+        <div class="edit-form__group">
+          <label class="edit-form__label" for="edit-title-{{ entry.id }}"
+            >Title</label
+          >
+          <input
+            class="edit-form__input"
+            type="text"
+            id="edit-title-{{ entry.id }}"
+            name="title"
+            value="{{ entry.title|default:'' }}"
+            placeholder="Post title (optional)"
+          />
+        </div>
+
+        <div class="edit-form__group">
+          <label class="edit-form__checkbox-row">
+            <input type="checkbox" class="edit-img-toggle" />
+            Replace Images
+          </label>
+        </div>
+
+        <div class="edit-img-section" style="display: none">
+          <label class="modal__upload-area edit-img-upload-area">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+            </svg>
+            <span>Add photos (up to 5)</span>
+            <input
+              type="file"
+              name="image"
+              accept="image/*"
+              multiple
+              class="edit-img-input"
+              style="display: none"
+            />
+          </label>
+          <p class="edit-img-indicator" style="display: none"></p>
+          <div
+            class="edit-img-preview"
+            style="display: none; flex-wrap: wrap; gap: 4px; margin-top: 6px"
+          ></div>
+        </div>
+
+        {% if entry.display_text or not entry.display_has_image and not entry.display_has_gallery %}
+        <div class="edit-form__group">
+          <label class="edit-form__label" for="edit-content-{{ entry.id }}"
+            >Content</label
+          >
+          <textarea
+            class="edit-form__textarea"
+            id="edit-content-{{ entry.id }}"
+            name="content"
+            placeholder="What's on your mind?"
+          >
+{{ entry.display_text }}</textarea
+          >
+        </div>
+
+        <div class="edit-form__group">
+          <label class="edit-form__checkbox-row">
+            <input
+              type="checkbox"
+              name="use_markdown"
+              {%
+              if
+              entry.display_is_markdown
+              %}checked{%
+              endif
+              %}
+            />
+            Use Markdown
+          </label>
+        </div>
+
+        <div class="edit-form__group">
+          <label class="edit-form__label" for="edit-vis-{{ entry.id }}"
+            >Visibility</label
+          >
+          <select
+            class="edit-form__select"
+            id="edit-vis-{{ entry.id }}"
+            name="visibility"
+          >
+            <option
+              value="PUBLIC"
+              {% if entry.visibility == "PUBLIC" %}selected{% endif %}
+            >
+              &#127760; Public
+            </option>
+            <option
+              value="FRIENDS"
+              {% if entry.visibility == "FRIENDS" %}selected{% endif %}
+            >
+              &#128101; Friends
+            </option>
+            <option
+              value="UNLISTED"
+              {% if entry.visibility == "UNLISTED" %}selected{% endif %}
+            >
+              &#128279; Unlisted
+            </option>
+          </select>
+        </div>
+        {% endif %}
+      </form>
+    </div>
+
+    <div class="store-edit-footer" style="display: none">
+      <button
+        class="overlay-btn overlay-btn--secondary"
+        data-action="cancelEdit"
+        data-id="{{ entry.id }}"
+      >
+        Cancel
+      </button>
+      <button
+        class="overlay-btn overlay-btn--primary"
+        data-action="submitEdit"
+        data-id="{{ entry.id }}"
+      >
+        Save Changes
+      </button>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,145 @@
+<!-- The following UI file was written by Github Copilot "Create a registration file 
+that with username, password, logo, login and registration buttons", 2026-02-28 -->
+{% load static %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Transparent &mdash; Create Account</title>
+    <link rel="stylesheet" href="{% static 'base.css' %}" />
+    <link rel="stylesheet" href="{% static 'auth.css' %}" />
+  </head>
+  <body>
+    <div class="card">
+      <div class="card__header">
+        <a href="/" class="card__logo">
+          <svg
+            viewBox="0 0 36 36"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <circle cx="18" cy="18" r="18" fill="#1877f2" />
+            <text
+              x="50%"
+              y="55%"
+              dominant-baseline="middle"
+              text-anchor="middle"
+              fill="white"
+              font-size="18"
+              font-weight="bold"
+              font-family="Arial"
+            >
+              T
+            </text>
+          </svg>
+          <span class="card__logo-text">Transparent</span>
+        </a>
+        <p class="card__subtitle">Create an account &mdash; it's free.</p>
+      </div>
+
+      {% if form.errors %}
+      <div class="card__errors">
+        <ul>
+          {% for field in form %} {% for error in field.errors %}
+          <li>{{ field.label }}: {{ error }}</li>
+          {% endfor %} {% endfor %} {% for error in form.non_field_errors %}
+          <li>{{ error }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+
+      <form method="post" novalidate>
+        {% csrf_token %}
+
+        <!-- Required -->
+        <p class="card__section-label">Account info</p>
+
+        <div class="card__field">
+          <input
+            class="card__input"
+            type="text"
+            name="username"
+            id="id_username"
+            placeholder="Username"
+            autofocus
+            autocomplete="username"
+            value="{{ form.username.value|default:'' }}"
+          />
+        </div>
+
+        <div class="card__field">
+          <input
+            class="card__input"
+            type="text"
+            name="display_name"
+            id="id_display_name"
+            placeholder="Display name"
+            value="{{ form.display_name.value|default:'' }}"
+          />
+          <p class="card__hint">This is the name others will see.</p>
+        </div>
+
+        <hr class="card__divider" />
+        <p class="card__section-label">Password</p>
+
+        <div class="card__field">
+          <input
+            class="card__input"
+            type="password"
+            name="password1"
+            id="id_password1"
+            placeholder="Password"
+            autocomplete="new-password"
+          />
+        </div>
+
+        <div class="card__field">
+          <input
+            class="card__input"
+            type="password"
+            name="password2"
+            id="id_password2"
+            placeholder="Confirm password"
+            autocomplete="new-password"
+          />
+        </div>
+
+        <hr class="card__divider" />
+        <p class="card__section-label">Optional</p>
+
+        <div class="card__field">
+          <input
+            class="card__input"
+            type="email"
+            name="email"
+            id="id_email"
+            placeholder="Email address"
+            autocomplete="email"
+            value="{{ form.email.value|default:'' }}"
+          />
+        </div>
+
+        <div class="card__field">
+          <input
+            class="card__input"
+            type="url"
+            name="github"
+            id="id_github"
+            placeholder="GitHub profile URL (https://github.com/...)"
+            value="{{ form.github.value|default:'' }}"
+          />
+        </div>
+
+        <button class="card__submit card__submit--green" type="submit">
+          Create Account
+        </button>
+      </form>
+
+      <p class="card__login-link">
+        Already have an account? <a href="/accounts/login/">Log In</a>
+      </p>
+    </div>
+  </body>
+</html>

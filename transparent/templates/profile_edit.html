@@ -1,0 +1,186 @@
+{% extends "stream.html" %}
+
+{% block title %}Edit Profile &mdash; Transparent{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* Scoped styles for this page only. */
+  .profile-edit-wrap {
+    max-width: 760px;
+    margin: calc(var(--navbar-height) + 24px) auto 40px;
+    padding: 0 12px;
+  }
+
+  .profile-edit-card {
+    padding: 22px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+  }
+
+  .profile-edit-header h2 {
+    margin: 0;
+    font-size: 1.2rem;
+    color: var(--text-primary);
+  }
+
+  .profile-edit-header p {
+    margin: 6px 0 0;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+  }
+
+  .profile-edit-current {
+    margin-top: 16px;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .profile-edit-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: #e5e7eb;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    color: #374151;
+  }
+
+  .profile-edit-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .profile-edit-form {
+    margin-top: 6px;
+  }
+
+  .profile-edit-row {
+    margin-bottom: 14px;
+  }
+
+  .profile-edit-row label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 0.87rem;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .profile-edit-row input,
+  .profile-edit-row textarea {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 0.93rem;
+    background: var(--surface);
+    color: var(--text-primary);
+  }
+
+  .profile-edit-row textarea {
+    min-height: 108px;
+    resize: vertical;
+  }
+
+  .profile-edit-help {
+    margin-top: 6px;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+  }
+
+  .profile-edit-error {
+    margin-top: 6px;
+    font-size: 0.82rem;
+    color: #c0392b;
+  }
+
+  .profile-edit-actions {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .profile-edit-actions a {
+    text-decoration: none;
+  }
+</style>
+{% endblock %}
+
+{% block main %}
+<main class="profile-edit-wrap">
+  <section class="profile-edit-card">
+    <div class="profile-edit-header">
+      <h2>Edit Profile</h2>
+      <p>Keep your public profile updated.</p>
+    </div>
+
+    <!-- Small identity row so user sees which profile is being edited. -->
+    <div class="profile-edit-current">
+      <div class="profile-edit-avatar">
+        {% if request.user.profile_image %}
+          <img src="{{ request.user.profile_image }}" alt="{{ request.user.username }}" />
+        {% else %}
+          <span>{{ request.user.username|first|upper }}</span>
+        {% endif %}
+      </div>
+      <div>
+        <div style="font-weight: 600; color: var(--text-primary);">{{ request.user.display_name|default:request.user.username }}</div>
+        <div style="font-size: 0.8rem; color: var(--text-secondary);">@{{ request.user.username }}</div>
+      </div>
+    </div>
+
+    <form method="post" class="profile-edit-form" novalidate>
+      {% csrf_token %}
+
+      <!-- Keep fields simple and predictable for browser-based editing. -->
+      <div class="profile-edit-row">
+        <label for="{{ form.display_name.id_for_label }}">Display name</label>
+        {{ form.display_name }}
+        {% if form.display_name.errors %}
+          <div class="profile-edit-error">{{ form.display_name.errors|striptags }}</div>
+        {% endif %}
+      </div>
+
+      <div class="profile-edit-row">
+        <label for="{{ form.description.id_for_label }}">Description</label>
+        {{ form.description }}
+        {% if form.description.errors %}
+          <div class="profile-edit-error">{{ form.description.errors|striptags }}</div>
+        {% endif %}
+      </div>
+
+      <div class="profile-edit-row">
+        <label for="{{ form.profile_image.id_for_label }}">Profile image URL</label>
+        {{ form.profile_image }}
+        <div class="profile-edit-help">Use a direct image link (https://...)</div>
+        {% if form.profile_image.errors %}
+          <div class="profile-edit-error">{{ form.profile_image.errors|striptags }}</div>
+        {% endif %}
+      </div>
+
+      <div class="profile-edit-row">
+        <label for="{{ form.github.id_for_label }}">GitHub URL</label>
+        {{ form.github }}
+        {% if form.github.errors %}
+          <div class="profile-edit-error">{{ form.github.errors|striptags }}</div>
+        {% endif %}
+      </div>
+
+      <div class="profile-edit-actions">
+        <a href="{% url 'profile' %}" class="overlay-btn overlay-btn--secondary">Cancel</a>
+        <button type="submit" class="overlay-btn overlay-btn--primary">Save changes</button>
+      </div>
+    </form>
+  </section>
+</main>
+{% endblock %}

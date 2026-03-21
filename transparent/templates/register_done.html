@@ -1,0 +1,22 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Transparent &mdash; Registration Pending</title>
+    <link rel="stylesheet" href="{% static 'base.css' %}" />
+    <link rel="stylesheet" href="{% static 'auth.css' %}" />
+  </head>
+  <body>
+    <div class="card">
+      <div class="card__icon">&#10003;</div>
+      <h1 class="card__title">Account Created!</h1>
+      <p class="card__body">
+        Your account is pending admin approval before you can log in. You'll be
+        able to access Transparent once an administrator approves your account.
+      </p>
+      <a href="/accounts/login/" class="card__link">Back to Login</a>
+    </div>
+  </body>
+</html>

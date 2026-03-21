@@ -1,0 +1,68 @@
+/* The following css file is written by Github Copilot, "Create a facebook 
+like UI interface that takes entries and displays them on the home page. Create
+a top header with logo on the left, (icons of homepage, friends and profile).
+Then there will be a post bar (which when clicked will open it as a center element
+with options like images, mardown checkbox) on the left, and send button on the
+right", 2026-02-28 */
+/* =============================================
+   CSS Variables
+   ============================================= */
+:root {
+    /* Brand */
+    --primary:        #1877f2;
+    --primary-hover:  #166fe5;
+    --green:          #42b72a;
+    --green-hover:    #36a420;
+
+    /* Surfaces */
+    --bg:             #f0f2f5;
+    --surface:        #ffffff;
+    --surface-hover:  #f2f2f2;
+
+    /* Text */
+    --text-primary:   #1c1e21;
+    --text-secondary: #65676b;
+    --text-muted:     #8a8d91;
+
+    /* Borders */
+    --border:         #dadde1;
+    --border-input:   #dddfe2;
+
+    /* Feedback */
+    --error-bg:       #fff0f0;
+    --error-border:   #f5c2c2;
+    --error-color:    #c0392b;
+
+    /* Layout */
+    --navbar-height:  56px;
+    --radius:         8px;
+    --radius-lg:      12px;
+    --avatar-size:    40px;
+    --avatar-sm:      32px;
+
+    /* Elevation */
+    --shadow:         0 1px 2px rgba(0, 0, 0, .1);
+    --shadow-card:    0 2px 4px rgba(0, 0, 0, .1), 0 8px 16px rgba(0, 0, 0, .1);
+
+    /* Typography */
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+            Arial, sans-serif;
+}
+
+/* =============================================
+   Reset
+   ============================================= */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { font-size: 15px; }
+
+body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text-primary);
+    min-height: 100vh;
+}
+
+a { text-decoration: none; color: inherit; }
+button { font-family: var(--font); cursor: pointer; border: none; background: none; }
+svg { display: block; }

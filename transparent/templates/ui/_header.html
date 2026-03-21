@@ -1,0 +1,100 @@
+<header class="navbar">
+  <div class="navbar__logo">
+    <a href="/" class="navbar__logo-link">
+      <svg
+        class="navbar__logo-icon"
+        viewBox="0 0 36 36"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <circle cx="18" cy="18" r="18" fill="#1877f2" />
+        <text
+          x="50%"
+          y="55%"
+          dominant-baseline="middle"
+          text-anchor="middle"
+          fill="white"
+          font-size="18"
+          font-weight="bold"
+          font-family="Arial"
+        >
+          T
+        </text>
+      </svg>
+      <span class="navbar__logo-text">Transparent</span>
+    </a>
+  </div>
+
+  <nav class="navbar__nav">
+    <a
+      href="/"
+      class="navbar__nav-item {% if active_nav == 'home' %}navbar__nav-item--active{% endif %}"
+      title="Home"
+    >
+      <svg viewBox="0 0 24 24" fill="currentColor">
+        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
+      </svg>
+    </a>
+    <a
+      href="/explore/"
+      class="navbar__nav-item {% if active_nav == 'explore' %}navbar__nav-item--active{% endif %}"
+      title="Explore"
+    >
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path
+          d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm3.21 6.79-2.03 5.41-5.39 2.01 2.01-5.39 5.41-2.03zm-3.21 11.21a8 8 0 110-16 8 8 0 010 16z"
+        />
+      </svg>
+    </a>
+    <a
+      href="/authors/"
+      class="navbar__nav-item {% if active_nav == 'authors' %}navbar__nav-item--active{% endif %}"
+      title="Authors"
+    >
+      <svg viewBox="0 0 24 24" fill="currentColor">
+        <path
+          d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"
+        />
+      </svg>
+    </a>
+    <a
+      href="/profile/"
+      class="navbar__nav-item {% if active_nav == 'profile' %}navbar__nav-item--active{% endif %}"
+      title="Profile"
+      style="position: relative"
+    >
+      <svg viewBox="0 0 24 24" fill="currentColor">
+        <path
+          d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"
+        />
+      </svg>
+      {% if pending_count and pending_count > 0 %}
+      <span
+        style="
+          position: absolute;
+          top: 2px;
+          right: 34px;
+          background: #e74c3c;
+          color: white;
+          font-size: 11px;
+          font-weight: 700;
+          min-width: 18px;
+          height: 18px;
+          line-height: 18px;
+          text-align: center;
+          border-radius: 9px;
+          padding: 0 4px;
+        "
+        >{{ pending_count }}</span
+      >
+      {% endif %}
+    </a>
+  </nav>
+
+  <div class="navbar__right">
+    <form class="navbar__logout" method="post" action="{% url 'logout' %}">
+      {% csrf_token %}
+      <button type="submit" class="navbar__logout-btn">Log out</button>
+    </form>
+  </div>
+</header>

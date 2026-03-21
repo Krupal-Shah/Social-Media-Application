@@ -1,0 +1,324 @@
+<!-- The following UI file was written with the help of Github Copilot, "Create a facebook 
+like UI interface that takes entries and displays them on the home page. Create
+a top header with logo on the left, (icons of homepage, friends and profile).
+Then there will be a post bar (which when clicked will open it as a center element
+with options like images, mardown checkbox) on the left, and send button on the
+right", 2026-02-28 -->
+
+{% load static %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="{% static 'base.css' %}" />
+    <link rel="stylesheet" href="{% static 'stream.css' %}" />
+    {% block extra_head %}{% endblock %} {% block page_scripts %}
+    <script src="{% static 'stream.min.js' %}" defer></script>
+    {% endblock %}
+    <title>{% block title %}Transparent &mdash; Home{% endblock %}</title>
+  </head>
+  <body>
+    <!-- ===== TOP NAVIGATION BAR ===== -->
+    {% include "ui/_header.html" %} {% block main %}
+    <!-- ===== MAIN CONTENT ===== -->
+    <main class="feed-layout">
+      {% if messages %}
+      <div style="max-width: 680px; margin: 12px auto 0; padding: 0 12px">
+        {% for message in messages %}
+        <div
+          style="
+            background: #fff0f0;
+            border: 1px solid #f5c2c2;
+            border-radius: 6px;
+            color: #c0392b;
+            font-size: 14px;
+            padding: 10px 14px;
+            margin-bottom: 8px;
+          "
+        >
+          {{ message }}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      <!-- Feed Column -->
+      <section class="feed">
+        <!-- Post Box (collapsed) -->
+        <div class="post-box">
+          <div class="post-box__row">
+            <div class="post-box__avatar">
+              {% if request.user.author.profile_image %}
+              <img
+                src="{{ request.user.author.profile_image }}"
+                alt="Profile"
+              />
+              {% else %}
+              <span>{{ request.user.username|first|upper }}</span>
+              {% endif %}
+            </div>
+            <button class="post-box__input" id="openPostModal">
+              What&rsquo;s on your mind,
+              {{request.user.author.display_name|default:request.user.username}}?
+            </button>
+          </div>
+        </div>
+
+        <!-- Entries Feed -->
+        {% for entry in entries %}
+        <article class="entry-card">
+          <div class="entry-card__header">
+            <div class="entry-card__avatar">
+              {% if entry.author.profile_image %}
+              <img
+                src="{{ entry.author.profile_image }}"
+                alt="{{ entry.author.display_name }}"
+              />
+              {% else %}
+              <span>{{ entry.author.display_name|first|upper }}</span>
+              {% endif %}
+            </div>
+            <div class="entry-card__meta">
+              <span class="entry-card__author"
+                >{{ entry.author.display_name }}</span
+              >
+              <span class="entry-card__date">
+                {% if entry.updated_at != entry.published %}
+                {{entry.updated_at|timesince }} ago (edited) {% else %}
+                {{entry.published|timesince }} ago {% endif %}
+              </span>
+            </div>
+            <span
+              class="entry-card__visibility entry-card__visibility--{{ entry.visibility|lower }}"
+              >{{ entry.visibility }}</span
+            >
+          </div>
+
+          {% if entry.title %}
+          <h2 class="entry-card__title">{{ entry.title }}</h2>
+          {% endif %} {% if entry.description %}
+          <p class="entry-card__description">{{ entry.description }}</p>
+          {% endif %}
+
+          <div class="entry-card__content">
+            {% if entry.display_text %} {% if entry.display_is_markdown %}
+            <div
+              class="entry-card__content-markdown"
+              data-markdown="{{ entry.display_text|escape }}"
+            ></div>
+            {% else %}
+            <p class="entry-card__content-plain">
+              {{ entry.display_text|striptags }}
+            </p>
+            {% endif %} {% endif %} {% if entry.display_has_image %}
+            <img
+              src="{{ entry.display_image_src }}"
+              alt="Post image"
+              class="entry-card__content-image"
+            />
+            {% elif entry.display_has_gallery %}
+            <div
+              class="entry-card__carousel"
+              data-gallery="{{ entry.display_gallery_json|escape }}"
+            ></div>
+            {% endif %}
+          </div>
+
+          <div class="entry-card__footer">
+            <form
+              method="post"
+              action="{% if entry.liked_by_me %}/api/entries/{{ entry.id }}/unlike/{% else %}/api/entries/{{ entry.id }}/like/{% endif %}"
+              style="display: inline"
+            >
+              {% csrf_token %}
+              <input
+                type="hidden"
+                name="next"
+                value="{{ request.get_full_path }}"
+              />
+              <button class="entry-card__footer-btn" type="submit">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                  <path
+                    d="M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z"
+                  />
+                </svg>
+                {% if entry.liked_by_me %}Unlike{% else %}Like{% endif %} ({{ entry.likes_count }})
+              </button>
+            </form>
+            <a
+              class="entry-card__footer-btn"
+              href="/api/entries/{{ entry.id }}/"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path
+                  d="M21.99 4c0-1.1-.89-2-1.99-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4-.01-18z"
+                />
+              </svg>
+              Comment ({{ entry.comments_count }})
+            </a>
+            <button
+              class="entry-card__footer-btn"
+              onclick="
+                navigator.clipboard.writeText(window.location.origin + '/api/entries/{{ entry.id }}/');
+                this.textContent = 'Link copied!';
+                setTimeout(() => { this.innerHTML = '<svg viewBox=\'0 0 24 24\' fill=\'currentColor\'><path d=\'M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z\'></path></svg> Share'; }, 2000);
+              "
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path
+                  d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"
+                />
+              </svg>
+              Share
+            </button>
+          </div>
+        </article>
+        {% empty %}
+        <div class="feed__empty">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path
+              d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"
+            />
+          </svg>
+          <p>No posts yet. Be the first to share something!</p>
+        </div>
+        {% endfor %}
+      </section>
+    </main>
+
+    <!-- ===== CREATE POST MODAL ===== -->
+    <div
+      class="modal-overlay"
+      id="postModal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modalTitle"
+    >
+      <div class="modal">
+        <div class="modal__header">
+          <h2 class="modal__title" id="modalTitle">Create Post</h2>
+          <button class="modal__close" id="closePostModal" aria-label="Close">
+            &times;
+          </button>
+        </div>
+        <hr class="modal__divider" />
+
+        <div class="modal__author">
+          <div class="modal__avatar">
+            {% if request.user.author.profile_image %}
+            <img src="{{ request.user.author.profile_image }}" alt="Profile" />
+            {% else %}
+            <span>{{ request.user.username|first|upper }}</span>
+            {% endif %}
+          </div>
+          <div>
+            <div class="modal__author-name">
+              {{request.user.author.display_name|default:request.user.username}}
+            </div>
+            <select class="modal__visibility" name="visibility">
+              <option value="PUBLIC">&#127760; Public</option>
+              <option value="FRIENDS">&#128101; Friends</option>
+              <option value="UNLISTED">&#128279; Unlisted</option>
+            </select>
+          </div>
+        </div>
+
+        <form
+          class="modal__form"
+          method="post"
+          action="/api/entries/create/"
+          enctype="multipart/form-data"
+        >
+          {% csrf_token %}
+
+          <input
+            type="text"
+            class="modal__input-title"
+            name="title"
+            placeholder="Title (optional)"
+          />
+
+          <textarea
+            class="modal__textarea"
+            id="postContent"
+            name="content"
+            placeholder="What&rsquo;s on your mind?"
+            rows="5"
+          ></textarea>
+
+          <!-- Live markdown preview (visible only when Markdown checkbox is on) -->
+          <div
+            id="markdownPreview"
+            class="modal__markdown-preview"
+            style="display: none"
+          ></div>
+
+          <!-- Attachment Options -->
+          <div class="modal__options">
+            <label class="modal__option-label" id="imageOptionLabel">
+              <input type="checkbox" id="imageOption" name="use_image" />
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path
+                  d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"
+                />
+              </svg>
+              Add Image
+            </label>
+            <label class="modal__option-label">
+              <input type="checkbox" id="markdownOption" name="use_markdown" />
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M3 3h18v18H3V3zm10 13h2V8h-2v8zm-4-3h2V8H9v5z" />
+              </svg>
+              Markdown
+            </label>
+          </div>
+
+          <!-- Image upload (shown when checkbox ticked) -->
+          <div
+            class="modal__image-upload"
+            id="imageUploadSection"
+            style="display: none"
+          >
+            <label class="modal__upload-area" for="imageFileInput">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+              </svg>
+              <span>Add photos/videos</span>
+              <input
+                type="file"
+                id="imageFileInput"
+                name="image"
+                accept="image/*"
+                multiple
+                style="display: none"
+              />
+            </label>
+            <p
+              id="imageIndicator"
+              class="modal__image-indicator"
+              style="display: none"
+            ></p>
+            <div
+              id="imagePreviewCarousel"
+              class="modal__image-preview"
+              style="display: none"
+            ></div>
+          </div>
+
+          <div class="modal__footer">
+            <input
+              type="hidden"
+              name="visibility"
+              id="visibilityHidden"
+              value="PUBLIC"
+            />
+            <button type="submit" class="modal__send-btn" id="sendPostBtn">
+              Post
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+    {% endblock %}
+  </body>
+</html>

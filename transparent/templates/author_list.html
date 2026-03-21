@@ -1,0 +1,74 @@
+<!--  ChatGPT5.1, OpenAI, "Generate a html/css to show the list of authors",https://chatgpt.com/, 2026-02-28  -->
+
+{% load static %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="{% static 'base.css' %}" />
+    <link rel="stylesheet" href="{% static 'stream.css' %}" />
+    <script src="{% static 'entry_detail.min.js' %}" defer></script>
+    <title>Transparent &mdash; Authors</title>
+  </head>
+  <body>
+    {% include "ui/_header.html" %}
+
+    <main class="feed-layout">
+      <h2
+        style="
+          font-size: 1.1rem;
+          font-weight: 700;
+          color: var(--text-primary);
+          margin-bottom: 12px;
+        "
+      >
+        People on this node
+      </h2>
+
+      {% for author in authors %}
+      <a href="/authors/{{ author.pk }}/" style="text-decoration: none">
+        <div
+          class="entry-card"
+          style="
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            margin-bottom: 8px;
+          "
+        >
+          <div class="entry-card__avatar">
+            {% if author.profile_image %}
+            <img
+              src="{{ author.profile_image }}"
+              alt="{{ author.display_name }}"
+            />
+            {% else %}
+            <span>{{ author.display_name|first|upper }}</span>
+            {% endif %}
+          </div>
+          <div>
+            <div
+              style="
+                font-weight: 600;
+                font-size: 0.9375rem;
+                color: var(--text-primary);
+              "
+            >
+              {{ author.display_name }}
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-secondary)">
+              @{{ author.username }}
+            </div>
+          </div>
+        </div>
+      </a>
+      {% empty %}
+      <div class="feed__empty">
+        <p>No other authors on this node yet.</p>
+      </div>
+      {% endfor %}
+    </main>
+  </body>
+</html>

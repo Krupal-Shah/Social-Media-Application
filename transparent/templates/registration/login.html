@@ -1,0 +1,90 @@
+<!-- The following UI file was written by Github Copilot "Create a login file 
+that with username, password, logo, login and registration buttons", 2026-02-28 -->
+{% load static %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Transparent &mdash; Login</title>
+    <link rel="stylesheet" href="{% static 'base.css' %}" />
+    <link rel="stylesheet" href="{% static 'auth.css' %}" />
+  </head>
+  <body>
+    <div class="login-wrapper">
+      <!-- Branding -->
+      <div class="branding">
+        <div class="branding__logo">
+          <svg
+            viewBox="0 0 36 36"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <circle cx="18" cy="18" r="18" fill="#1877f2" />
+            <text
+              x="50%"
+              y="55%"
+              dominant-baseline="middle"
+              text-anchor="middle"
+              fill="white"
+              font-size="18"
+              font-weight="bold"
+              font-family="Arial"
+            >
+              T
+            </text>
+          </svg>
+          <span class="branding__name">Transparent</span>
+        </div>
+        <p class="branding__tagline">
+          Connect with friends and share what matters — openly and
+          transparently.
+        </p>
+      </div>
+
+      <!-- Login Card -->
+      <div class="card">
+        {% if error %}
+        <div class="card__error">{{ error }}</div>
+        {% endif %}
+
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ next }}" />
+
+          <div class="card__field">
+            <input
+              class="card__input"
+              type="text"
+              name="username"
+              id="id_username"
+              placeholder="Username"
+              autofocus
+              autocomplete="username"
+              value="{{ request.POST.username|default:'' }}"
+            />
+          </div>
+
+          <div class="card__field">
+            <input
+              class="card__input"
+              type="password"
+              name="password"
+              id="id_password"
+              placeholder="Password"
+              autocomplete="current-password"
+            />
+          </div>
+
+          <button class="card__submit" type="submit">Log In</button>
+        </form>
+
+        <hr class="card__divider" />
+
+        <a href="/accounts/register/" class="card__register"
+          >Create New Account</a
+        >
+      </div>
+    </div>
+  </body>
+</html>
