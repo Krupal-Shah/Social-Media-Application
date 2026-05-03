@@ -1,3 +1,5 @@
+"""Application configuration for the social app."""
+
 from django.apps import AppConfig
 
 

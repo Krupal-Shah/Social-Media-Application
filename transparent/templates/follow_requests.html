@@ -1,63 +1,231 @@
-{% extends "stream.html" %}
-{% load static %}
-{% block title %}Follow Requests &mdash; Transparent{% endblock %}
-{% block extra_head %}
+{% extends "stream.html" %} {% load static %} {% block title %}Follow Requests
+&mdash; Transparent{% endblock %} {% block extra_head %}
 <link rel="stylesheet" href="{% static 'profile.css' %}" />
-{% endblock %}
-{% block page_scripts %}{% endblock %}
-{% block main %}
-<main style="max-width: 600px; margin: 24px auto; padding: 0 12px;">
-  <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
-    <a href="/profile/" style="color: #262626; text-decoration: none; display: flex; align-items: center;">
-      <svg viewBox="0 0 24 24" fill="currentColor" style="width: 24px; height: 24px;">
-        <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+{% endblock %} {% block page_scripts %}{% endblock %} {% block main %}
+<main style="max-width: 600px; margin: 24px auto; padding: 0 12px">
+  <div
+    style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px"
+  >
+    <a
+      href="/profile/"
+      style="
+        color: #262626;
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+      "
+    >
+      <svg
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        style="width: 24px; height: 24px"
+      >
+        <path
+          d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"
+        />
       </svg>
     </a>
-    <h1 style="font-size: 1.25rem; font-weight: 700; color: #262626; margin: 0;">Follow Requests</h1>
+    <h1 style="font-size: 1.25rem; font-weight: 700; color: #262626; margin: 0">
+      Follow Requests
+    </h1>
   </div>
 
   {% for requester in pending_requests %}
-  <div style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: #fff; border: 1px solid #dbdbdb; border-radius: 8px; margin-bottom: 8px;">
-    <div style="width: 44px; height: 44px; border-radius: 50%; background: #e4e6eb; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 1.1rem; color: #65676b; flex-shrink: 0; overflow: hidden;">
+  <div
+    style="
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      background: #fff;
+      border: 1px solid #dbdbdb;
+      border-radius: 8px;
+      margin-bottom: 8px;
+    "
+  >
+    {% if requester.fqid and not requester.id %}
+    <a
+      href="{% url 'remote_author_profile' %}?fqid={{ requester.fqid|urlencode }}"
+      style="
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: #e4e6eb;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 1.1rem;
+        color: #65676b;
+        flex-shrink: 0;
+        overflow: hidden;
+        text-decoration: none;
+      "
+    >
       {% if requester.profile_image %}
-        <img src="{{ requester.profile_image }}" alt="{{ requester.display_name }}" style="width: 100%; height: 100%; object-fit: cover;" />
+      <img
+        src="{{ requester.profile_image }}"
+        alt="{{ requester.display_name }}"
+        style="width: 100%; height: 100%; object-fit: cover"
+      />
       {% else %}
-        <span>{{ requester.display_name|first|upper }}</span>
+      <span>{{ requester.display_name|first|upper }}</span>
+      {% endif %}
+    </a>
+    {% else %}
+    <div
+      style="
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: #e4e6eb;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 1.1rem;
+        color: #65676b;
+        flex-shrink: 0;
+        overflow: hidden;
+      "
+    >
+      {% if requester.profile_image %}
+      <img
+        src="{{ requester.profile_image }}"
+        alt="{{ requester.display_name }}"
+        style="width: 100%; height: 100%; object-fit: cover"
+      />
+      {% else %}
+      <span>{{ requester.display_name|first|upper }}</span>
       {% endif %}
     </div>
-    <div style="flex: 1; min-width: 0;">
-      <div style="font-size: 0.9375rem; font-weight: 600; color: #262626;">
+    {% endif %}
+    <div style="flex: 1; min-width: 0">
+      <div style="font-size: 0.9375rem; font-weight: 600; color: #262626">
         {% if requester.id %}
-          <a href="/authors/{{ requester.id }}/" style="text-decoration: none; color: inherit;">{{ requester.display_name }}</a>
-        {% else %}
-          {{ requester.display_name }}
-        {% endif %}
+        <a
+          href="/authors/{{ requester.id }}/"
+          style="text-decoration: none; color: inherit"
+          >{{ requester.display_name }}</a
+        >
+        {% elif requester.fqid %}
+        <a
+          href="{% url 'remote_author_profile' %}?fqid={{ requester.fqid|urlencode }}"
+          style="text-decoration: none; color: inherit"
+          >{{ requester.display_name }}</a
+        >
+        {% else %} {{ requester.display_name }} {% endif %}
       </div>
       {% if requester.username %}
-      <div style="font-size: 0.8125rem; color: #8e8e8e;">@{{ requester.username }}</div>
+      <div style="font-size: 0.8125rem; color: #8e8e8e">
+        @{{ requester.username }}
+      </div>
+      {% endif %} {% if requester.is_remote %}
+      <div style="font-size: 0.6875rem; color: #b0b0b0; margin-top: 2px">
+        Remote author
+      </div>
       {% endif %}
     </div>
     {% if requester.id %}
-    <form method="post" action="/authors/{{ requester.id }}/approve/" style="margin: 0;">
+    <!-- Local author: use UUID-based routes -->
+    <form
+      method="post"
+      action="/authors/{{ requester.id }}/approve/"
+      style="margin: 0"
+    >
       {% csrf_token %}
-      <button type="submit" style="background: #1877f2; color: white; border: none; border-radius: 8px; padding: 8px 20px; font-size: 0.875rem; font-weight: 600; cursor: pointer;">
+      <button
+        type="submit"
+        style="
+          background: #1877f2;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          padding: 8px 20px;
+          font-size: 0.875rem;
+          font-weight: 600;
+          cursor: pointer;
+        "
+      >
         Confirm
       </button>
     </form>
-    <form method="post" action="/authors/{{ requester.id }}/deny/" style="margin: 0;">
+    <form
+      method="post"
+      action="/authors/{{ requester.id }}/deny/"
+      style="margin: 0"
+    >
       {% csrf_token %}
-      <button type="submit" style="background: #efefef; color: #262626; border: none; border-radius: 8px; padding: 8px 20px; font-size: 0.875rem; font-weight: 600; cursor: pointer;">
+      <button
+        type="submit"
+        style="
+          background: #efefef;
+          color: #262626;
+          border: none;
+          border-radius: 8px;
+          padding: 8px 20px;
+          font-size: 0.875rem;
+          font-weight: 600;
+          cursor: pointer;
+        "
+      >
+        Delete
+      </button>
+    </form>
+    {% elif requester.fqid %}
+    <!-- Remote author: use FQID-based routes -->
+    <form method="post" action="/authors/remote-approve/" style="margin: 0">
+      {% csrf_token %}
+      <input type="hidden" name="follower_fqid" value="{{ requester.fqid }}" />
+      <button
+        type="submit"
+        style="
+          background: #1877f2;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          padding: 8px 20px;
+          font-size: 0.875rem;
+          font-weight: 600;
+          cursor: pointer;
+        "
+      >
+        Confirm
+      </button>
+    </form>
+    <form method="post" action="/authors/remote-deny/" style="margin: 0">
+      {% csrf_token %}
+      <input type="hidden" name="follower_fqid" value="{{ requester.fqid }}" />
+      <button
+        type="submit"
+        style="
+          background: #efefef;
+          color: #262626;
+          border: none;
+          border-radius: 8px;
+          padding: 8px 20px;
+          font-size: 0.875rem;
+          font-weight: 600;
+          cursor: pointer;
+        "
+      >
         Delete
       </button>
     </form>
     {% endif %}
   </div>
   {% empty %}
-  <div style="text-align: center; padding: 48px 0; color: #8e8e8e;">
-    <svg viewBox="0 0 24 24" fill="currentColor" style="width: 48px; height: 48px; opacity: 0.4; margin-bottom: 12px;">
-      <path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+  <div style="text-align: center; padding: 48px 0; color: #8e8e8e">
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      style="width: 48px; height: 48px; opacity: 0.4; margin-bottom: 12px"
+    >
+      <path
+        d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
+      />
     </svg>
-    <p style="font-size: 0.9375rem;">No follow requests</p>
+    <p style="font-size: 0.9375rem">No follow requests</p>
   </div>
   {% endfor %}
 </main>

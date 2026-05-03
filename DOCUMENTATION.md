@@ -442,23 +442,208 @@ Response: `{ "type": "follow_requests", "follow_requests": [{ "type": "follow", 
 
 ## Inbox
 
-### POST `/api/authors/{AUTHOR_SERIAL}/inbox` (Receive follow request)
+### POST `/api/authors/{AUTHOR_SERIAL}/inbox`
+### PUT `/api/authors/{AUTHOR_SERIAL}/inbox`
 
-**When:** Remote node delivers a follow request. **How:** POST with follow object, no auth required. **Why:** Cross-node follow delivery. **Why not:** Use following PUT for local follows.
-**Notes:** Creates pending follow (`accepted=False`). Idempotent. Only `type: "follow"` supported.
+**When:** Remote node sends or updates an inbox item.  
+**How:** `POST` creates/ingests, `PUT` updates existing item semantics for entries.  
+**Auth:** Node-to-node authentication is required by remote auth checks.  
+**Supported `type`:** `follow`, `author`, `entry`, `comment`, `like`.
 
-Request fields:
+If `type` is not in the supported set:
 
-| Field | Type | Required | Example | Purpose |
-|-------|------|----------|---------|---------|
-| `type` | string | Yes | `"follow"` | Must be `"follow"`. Others return 400. |
-| `summary` | string | No | `"Bob wants to follow Alice"` | Human-readable. |
-| `actor` | object | Yes | `{"type":"author","id":"<fqid>"}` | Requesting author. `id` required. |
-| `object` | object | No | `{"type":"author","id":"<fqid>"}` | Target author. |
+```json
+{
+  "detail": "Unsupported inbox item type. Expected one of: follow, author, entry, comment, like."
+}
+```
 
-| Example | Result |
-|---------|--------|
-| POST with valid follow object (new) | 201 (`"Follow request received."`) |
-| POST same follow again | 200 (`"Follow request already exists."`) |
-| POST with `"type": "post"` | 400 (unsupported type) |
-| POST with missing `actor.id` | 400 (actor.id required) |
+Status: `400 Bad Request`
+
+### Inbox Item Type Behavior (Actual Code)
+
+| Type | Validation | Side Effects | Response |
+|------|------------|--------------|----------|
+| `author` | `id` required | Upserts remote author profile cache | `201 {"detail":"Author received."}` |
+| `entry` | none beyond type | Upserts entry payload in inbox by `payload.id` | `POST -> 201`, `PUT -> 200` with `{"detail":"Entry received."}` |
+| `comment` | `author.id`, `entry`, `comment` required | Stores inbox payload + creates local `Comment` if absent | `201 {"detail":"Comment received."}` |
+| `like` | `author.id`, `object` required | Stores inbox payload + creates local `Like` if absent | `201 {"detail":"Like received."}` |
+| `follow` | `actor.id` required; `status` in `REQUESTED, ACCEPTED, REJECTED, UNFOLLOW` | Stores inbox item + updates follow graph | depends on status (below) |
+
+### Follow Status Handling
+
+| `follow.status` | Effect | Response |
+|-----------------|--------|----------|
+| `REQUESTED` | Creates pending follow (`accepted=False`) from actor -> target | `201 {"detail":"Follow received."}` if new, else `200` |
+| `ACCEPTED` | Marks target-side acceptance relationship | `200 {"detail":"Follow acceptance received."}` |
+| `REJECTED` | Removes relationship records for the pair | `200 {"detail":"Follow rejection received."}` |
+| `UNFOLLOW` | Deletes actor->target follow record | `200 {"detail":"Unfollow received."}` |
+
+### Real Response Examples
+
+#### 1. Entry delivery
+
+Request (`POST /api/authors/{AUTHOR_SERIAL}/inbox`):
+
+```json
+{
+  "type": "entry",
+  "id": "https://remote.example/api/authors/4f3f.../entries/9c51...",
+  "title": "Remote Entry",
+  "description": "Delivered via inbox",
+  "contentType": "text/plain",
+  "content": "Hello from remote node",
+  "visibility": "PUBLIC",
+  "author": {
+    "type": "author",
+    "id": "https://remote.example/api/authors/4f3f...",
+    "host": "https://remote.example/",
+    "displayName": "RemoteUser"
+  }
+}
+```
+
+Response:
+
+```json
+{
+  "detail": "Entry received."
+}
+```
+
+Status: `201 Created`
+
+#### 2. Comment delivery
+
+Request:
+
+```json
+{
+  "type": "comment",
+  "id": "https://remote.example/api/commented/2175...",
+  "author": {
+    "id": "https://remote.example/api/authors/4f3f..."
+  },
+  "entry": "https://transparent.example/api/authors/aa11.../entries/bb22...",
+  "comment": "Nice post!",
+  "contentType": "text/plain"
+}
+```
+
+Response:
+
+```json
+{
+  "detail": "Comment received."
+}
+```
+
+Status: `201 Created`
+
+#### 3. Like delivery
+
+Request:
+
+```json
+{
+  "type": "like",
+  "id": "https://remote.example/api/liked/8ad2...",
+  "author": {
+    "id": "https://remote.example/api/authors/4f3f..."
+  },
+  "object": "https://transparent.example/api/authors/aa11.../entries/bb22..."
+}
+```
+
+Response:
+
+```json
+{
+  "detail": "Like received."
+}
+```
+
+Status: `201 Created`
+
+#### 4. Follow request delivery
+
+Request:
+
+```json
+{
+  "type": "follow",
+  "status": "REQUESTED",
+  "actor": {
+    "id": "https://remote.example/api/authors/4f3f..."
+  },
+  "object": {
+    "id": "https://transparent.example/api/authors/aa11..."
+  }
+}
+```
+
+Response (new request):
+
+```json
+{
+  "detail": "Follow received."
+}
+```
+
+Status: `201 Created`
+
+### Adapter Normalization Examples
+
+The inbox applies adapter-specific normalization before processing.
+
+#### SteelBlue follow status normalization
+
+Input:
+
+```json
+{
+  "type": "follow",
+  "status": "REQUESTING",
+  "actor": {"id": "https://steelblue.example/api/authors/a1"},
+  "object": {"id": "https://transparent.example/api/authors/b2"}
+}
+```
+
+Normalized payload used internally:
+
+```json
+{
+  "type": "follow",
+  "status": "REQUESTED",
+  "actor": {"type": "author", "id": "https://steelblue.example/api/authors/a1", "host": "https://steelblue.example/", "displayName": "a1"},
+  "object": {"type": "author", "id": "https://transparent.example/api/authors/b2", "host": "https://transparent.example/", "displayName": "b2"}
+}
+```
+
+#### PapayaWhip post alias normalization
+
+Input:
+
+```json
+{
+  "type": "post",
+  "id": "https://papayawhip.example/api/authors/a1/posts/p9",
+  "author": {"id": "https://papayawhip.example/api/authors/a1"},
+  "content_type": "text/markdown",
+  "content": "# hello"
+}
+```
+
+Normalized payload used internally:
+
+```json
+{
+  "type": "entry",
+  "id": "https://papayawhip.example/api/authors/a1/posts/p9",
+  "author": {"type": "author", "id": "https://papayawhip.example/api/authors/a1", "host": "https://papayawhip.example/", "displayName": "a1"},
+  "content_type": "text/markdown",
+  "contentType": "text/markdown",
+  "ContentType": "text/markdown",
+  "content": "# hello"
+}
+```

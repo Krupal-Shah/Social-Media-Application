@@ -1,3 +1,5 @@
+"""Application configuration for the authors app."""
+
 from django.apps import AppConfig
 
 

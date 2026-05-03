@@ -1,0 +1,213 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="{% static 'base.css' %}" />
+    <link rel="stylesheet" href="{% static 'stream.css' %}" />
+    <script src="{% static 'entry_detail.js' %}" type="module" defer></script>
+    <title>Transparent &mdash; {{ author.displayName }}</title>
+  </head>
+  <body>
+    {% include "ui/_header.html" %}
+
+    <main class="feed-layout">
+      <div class="entry-card" style="padding: 24px; margin-bottom: 12px">
+        <div style="display: flex; align-items: center; gap: 20px">
+          <div
+            class="entry-card__avatar"
+            style="width: 72px; height: 72px; font-size: 2rem; flex-shrink: 0"
+          >
+            {% if author.profileImage %}
+            <img
+              src="{{ author.profileImage }}"
+              alt="{{ author.displayName }}"
+            />
+            {% else %}
+            <span>{{ author.displayName|first|upper }}</span>
+            {% endif %}
+          </div>
+          <div style="flex: 1">
+            <div
+              style="
+                font-size: 1.25rem;
+                font-weight: 700;
+                color: var(--text-primary);
+              "
+            >
+              {{ author.displayName }}
+            </div>
+            <div
+              style="
+                font-size: 0.8125rem;
+                color: var(--text-secondary);
+                margin-bottom: 12px;
+              "
+            >
+              {{ author.host }}
+            </div>
+
+            {% if is_following %}
+            <div style="display: inline-flex; gap: 8px; align-items: center">
+              <button
+                type="button"
+                disabled
+                style="
+                  background: #e4e6eb;
+                  color: var(--text-primary);
+                  border: none;
+                  border-radius: 6px;
+                  padding: 7px 16px;
+                  font-size: 0.875rem;
+                  font-weight: 600;
+                  cursor: default;
+                "
+              >
+                Following
+              </button>
+              <form
+                method="post"
+                action="/authors/remote-unfollow/"
+                style="display: inline"
+              >
+                {% csrf_token %}
+                <input
+                  type="hidden"
+                  name="author_fqid"
+                  value="{{ remote_fqid }}"
+                />
+                <button
+                  type="submit"
+                  style="
+                    background: #ffffff;
+                    color: #c0392b;
+                    border: 1px solid #c0392b;
+                    border-radius: 6px;
+                    padding: 7px 16px;
+                    font-size: 0.875rem;
+                    font-weight: 600;
+                    cursor: pointer;
+                  "
+                >
+                  Unfollow
+                </button>
+              </form>
+            </div>
+            {% elif has_pending %}
+            <button
+              disabled
+              style="
+                background: #e4e6eb;
+                color: var(--text-secondary);
+                border: none;
+                border-radius: 6px;
+                padding: 7px 16px;
+                font-size: 0.875rem;
+                font-weight: 600;
+                cursor: not-allowed;
+              "
+            >
+              Request Sent
+            </button>
+            {% else %}
+            <form
+              method="post"
+              action="/authors/remote-follow/"
+              style="display: inline"
+            >
+              {% csrf_token %}
+              <input
+                type="hidden"
+                name="author_fqid"
+                value="{{ remote_fqid }}"
+              />
+              <button
+                type="submit"
+                style="
+                  background: #1877f2;
+                  color: white;
+                  border: none;
+                  border-radius: 6px;
+                  padding: 7px 16px;
+                  font-size: 0.875rem;
+                  font-weight: 600;
+                  cursor: pointer;
+                "
+              >
+                Follow
+              </button>
+            </form>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <h3
+        style="
+          font-size: 0.9375rem;
+          font-weight: 700;
+          color: var(--text-primary);
+          margin-bottom: 8px;
+        "
+      >
+        Public Posts
+      </h3>
+
+      {% for entry in entries %}
+      <article class="entry-card" style="margin-bottom: 14px">
+        <div class="entry-card__header">
+          <div class="entry-card__avatar">
+            {% if author.profileImage %}
+            <img
+              src="{{ author.profileImage }}"
+              alt="{{ author.displayName }}"
+            />
+            {% else %}
+            <span>{{ author.displayName|first|upper }}</span>
+            {% endif %}
+          </div>
+          <div class="entry-card__meta">
+            <span class="entry-card__author">{{ author.displayName }}</span>
+            <span class="entry-card__date"
+              >{{ entry.published|timesince }} ago</span
+            >
+          </div>
+          <span
+            class="entry-card__visibility entry-card__visibility--{{ entry.visibility|lower }}"
+          >
+            {{ entry.visibility }}
+          </span>
+        </div>
+
+        {% if entry.title %}
+        <h2 class="entry-card__title">{{ entry.title }}</h2>
+        {% endif %}
+
+        <div class="entry-card__content">
+          {% if entry.display_text %} {% if entry.display_is_markdown %}
+          <div
+            class="entry-card__content-markdown"
+            data-markdown="{{ entry.display_text|escape }}"
+          ></div>
+          {% else %}
+          <p class="entry-card__content-plain">
+            {{ entry.display_text|striptags }}
+          </p>
+          {% endif %} {% endif %} {% if entry.display_has_image %}
+          <img
+            src="{{ entry.display_image_src }}"
+            alt="Post image"
+            class="entry-card__content-image"
+          />
+          {% endif %}
+        </div>
+      </article>
+      {% empty %}
+      <div class="feed__empty">
+        <p>No public posts yet.</p>
+      </div>
+      {% endfor %}
+    </main>
+  </body>
+</html>

@@ -1,3 +1,5 @@
+"""Data models for the social app."""
+
 from django.db import models
 from django.conf import settings
 

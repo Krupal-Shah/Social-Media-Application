@@ -1,5 +1,8 @@
+"""Test cases for the interactions app."""
+
 from __future__ import annotations
 
+import base64
 import uuid
 
 from django.conf import settings
@@ -12,6 +15,7 @@ from social.models import Follow
 
 
 def _create_author(*, username: str, display_name: str, approved: bool = True) -> Author:
+    """Execute create author."""
     author = Author.objects.create_user(
         username=username,
         password="pw123456!",
@@ -26,6 +30,7 @@ def _create_author(*, username: str, display_name: str, approved: bool = True) -
 
 class CommentsAndLikesIntegrationTests(APITestCase):
     def test_comments_and_likes_appear_on_entry_api_response(self):
+        """Test that comments and likes appear on entry api response."""
         author = _create_author(username="author", display_name="Author")
         liker = _create_author(username="liker", display_name="Liker")
         commenter = _create_author(
@@ -74,6 +79,7 @@ class CommentsAndLikesIntegrationTests(APITestCase):
         self.assertEqual(resp.data["likes"]["src"][0]["type"], "like")
 
     def test_author_can_comment_and_like_accessible_entry(self):
+        """Test that author can comment and like accessible entry."""
         author = _create_author(username="entry_owner",
                                 display_name="Entry Owner")
         commenter = _create_author(
@@ -115,6 +121,7 @@ class CommentsAndLikesIntegrationTests(APITestCase):
             object_fqid=entry.fqid, author_fqid=commenter.fqid).count(), 1)
 
     def test_author_can_like_comment_they_can_access(self):
+        """Test that author can like comment they can access."""
         author = _create_author(username="owner2", display_name="Owner2")
         commenter = _create_author(
             username="commenter2", display_name="Commenter2")
@@ -147,6 +154,7 @@ class CommentsAndLikesIntegrationTests(APITestCase):
             object_fqid=comment.fqid, author_fqid=liker.fqid).count(), 1)
 
     def test_friends_only_comment_visibility_is_friend_or_comment_author(self):
+        """Test that friends only comment visibility is friend or comment author."""
         owner = _create_author(username="owner3", display_name="Owner3")
         friend = _create_author(username="friend3", display_name="Friend3")
         commenter = _create_author(
@@ -224,6 +232,7 @@ class CommentsAndLikesIntegrationTests(APITestCase):
 
 class CommentedAndLikedAPITests(APITestCase):
     def test_entry_fqid_comments_and_likes_endpoints(self):
+        """Test that entry fqid comments and likes endpoints."""
         owner = _create_author(username="owner_fqid",
                                display_name="Owner FQID")
         actor = _create_author(username="actor_fqid",
@@ -267,6 +276,7 @@ class CommentedAndLikedAPITests(APITestCase):
         self.assertEqual(likes_resp.data["count"], 1)
 
     def test_commented_and_liked_endpoints(self):
+        """Test that commented and liked endpoints."""
         owner = _create_author(username="owner_hist",
                                display_name="Owner Hist")
         entry = Entry.objects.create(
@@ -335,9 +345,22 @@ class CommentedAndLikedAPITests(APITestCase):
         self.assertEqual(like_by_fqid_resp.data["id"], created_like.fqid)
 
     def test_inbox_accepts_comment_and_like_payloads(self):
+        """Test that inbox accepts comment and like payloads."""
         owner = _create_author(username="inbox_owner",
                                display_name="Inbox Owner")
         remote_author_fqid = "http://remote.example/api/authors/remote-user"
+        username = "remote-node"
+        password = "remote-pass-123!"
+        from nodes.models import Node
+        Node.objects.create(
+            base_url="http://remote.example/api/",
+            username=username,
+            password=password,
+        )
+
+        token = base64.b64encode(
+            f"{username}:{password}".encode("utf-8")).decode("utf-8")
+        auth_headers = {"HTTP_AUTHORIZATION": f"Basic {token}"}
 
         comment_payload = {
             "type": "comment",
@@ -355,10 +378,10 @@ class CommentedAndLikedAPITests(APITestCase):
         }
 
         comment_resp = self.client.post(
-            f"/api/authors/{owner.id}/inbox", comment_payload, format="json"
+            f"/api/authors/{owner.id}/inbox", comment_payload, format="json", **auth_headers
         )
         like_resp = self.client.post(
-            f"/api/authors/{owner.id}/inbox", like_payload, format="json"
+            f"/api/authors/{owner.id}/inbox", like_payload, format="json", **auth_headers
         )
 
         self.assertEqual(comment_resp.status_code, 201)

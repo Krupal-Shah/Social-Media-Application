@@ -1,3 +1,5 @@
+"""Data models for the authors app."""
+
 import uuid
 from django.db import models
 from django.conf import settings
@@ -21,6 +23,7 @@ class Author(AbstractUser):
 
 
     def save(self, *args, **kwargs):
+        """Execute save."""
         if not self.host:
             self.host = settings.SERVICE_URL
         if not self.fqid:

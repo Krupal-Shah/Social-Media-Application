@@ -1,12 +1,19 @@
-from urllib.parse import unquote
+"""View logic for the authors app."""
+
+from urllib.parse import quote, unquote
+import logging
+import json
+from types import SimpleNamespace
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib.auth import authenticate, login
 from .forms import RegisterForm, ProfileEditForm
 from django.contrib.auth.decorators import login_required
 from .models import Author
+from inbox.models import InboxItem
 from social.models import Follow
 from django.http import Http404
+from django.db.models import Q
 from django.views.decorators.http import require_POST
 from .github_utils import fetch_and_create_github_entries
 from rest_framework.views import APIView
@@ -14,10 +21,33 @@ from rest_framework.response import Response
 from rest_framework import status as drf_status
 from .serializers import AuthorSerializer
 from core.pagination import AuthorsPagination
-from interactions.models import Comment, Like
+from core.fqid import serial_from_fqid, api_to_web_url
+import core.utils as cutils
+import authors.utils as autils
+from nodes.models import Node
+from nodes.models import RemoteAuthor
+from nodes.remote import (
+    authenticate_remote_api_request,
+    find_node_for_author_fqid,
+    publish_local_author_to_nodes,
+    send_follow_to_inbox,
+)
 import uuid
 
+
+logger = logging.getLogger(__name__)
+
+
+def _require_remote_or_local_api_auth(request):
+    """Execute require remote or local api auth."""
+    if request.user.is_authenticated:
+        return None
+    _, error = authenticate_remote_api_request(request, realm="node-authors")
+    return error
+
+
 def login_view(request):
+    """Execute login view."""
     if request.user.is_authenticated:
         return redirect("stream")
 
@@ -26,7 +56,7 @@ def login_view(request):
         username = request.POST.get("username", "").strip()
         password = request.POST.get("password", "")
         user = authenticate(request, username=username, password=password)
-        
+
         if user is not None:
             if not user.approved and not user.is_superuser:
                 error = "Your account is currently pending admin approval."
@@ -36,18 +66,19 @@ def login_view(request):
                 return redirect(next_url if next_url else "stream")
         else:
             error = "Your username or password is incorrect. Please try again."
-            
+
     return render(request, "registration/login.html", {"error": error, "next": request.GET.get("next", "")})
 
 
 def register(request):
+    """Execute register."""
     if request.user.is_authenticated:
         return redirect("stream")
 
     if request.method == "POST":
         form = RegisterForm(request.POST)
         if form.is_valid():
-            form.save()
+            form.save(request=request)
             return render(request, "register_done.html")
     else:
         form = RegisterForm()
@@ -56,22 +87,168 @@ def register(request):
 
 @login_required
 def author_list(request):
+    """Execute author list."""
     authors = Author.objects.filter(approved=True).exclude(pk=request.user.pk)
     pending_count = Follow.objects.filter(
         following_fqid=request.user.fqid, accepted=False
     ).count()
+
+    active_scopes = set()
+    for node in Node.objects.filter(active=True).only("base_url"):
+        api_base = cutils.normalize_api_base(node.base_url)
+        if not api_base:
+            continue
+        active_scopes.add(api_base)
+        if api_base.endswith("/api"):
+            active_scopes.add(api_base[:-4])
+
+    def _is_from_active_node(value):
+        """Execute is from active node."""
+        return cutils.is_from_active_node(value, active_scopes)
+
+    inbox_items = InboxItem.objects.filter(author=request.user)
+
+    remote_authors = []
+    for remote in RemoteAuthor.objects.select_related("node").filter(node__active=True).order_by("display_name", "fqid"):
+        if not _is_from_active_node(remote.fqid):
+            continue
+        remote_authors.append(
+            {
+                "id": remote.fqid,
+                "displayName": remote.display_name or remote.fqid.rstrip("/").split("/")[-1],
+                "username": remote.username,
+                "profileImage": remote.profile_image,
+                "host": remote.host,
+            }
+        )
+    logger.info(
+        "Author list build: user=%s local_authors=%s remote_authors=%s inbox_items=%s",
+        request.user.username,
+        authors.count(),
+        len(remote_authors),
+        inbox_items.count(),
+    )
+
+    def _norm_fqid(value):
+        """Execute norm fqid."""
+        return str(value or "").strip().rstrip("/")
+
+    my_follows = Follow.objects.filter(follower_fqid=request.user.fqid)
+    following_fqids = {
+        _norm_fqid(fqid)
+        for fqid in my_follows.filter(accepted=True).values_list("following_fqid", flat=True)
+        if _norm_fqid(fqid)
+    }
+    pending_fqids = {
+        _norm_fqid(fqid)
+        for fqid in my_follows.filter(accepted=False).values_list("following_fqid", flat=True)
+        if _norm_fqid(fqid)
+    }
+
+    for author in remote_authors:
+        fqid = _norm_fqid(author.get("id", ""))
+        if fqid in following_fqids:
+            author["follow_status"] = "following"
+        elif fqid in pending_fqids:
+            author["follow_status"] = "pending"
+        else:
+            author["follow_status"] = "none"
+
+    pending_signups = Author.objects.none()
+    if request.user.is_staff:
+        pending_signups = Author.objects.filter(approved=False).exclude(
+            pk=request.user.pk
+        ).order_by("date_joined")
+
     return render(
         request,
         "author_list.html",
-        {"authors": authors, "active_nav": "authors",
-            "pending_count": pending_count},
+        {
+            "authors": authors,
+            "remote_authors": remote_authors,
+            "active_nav": "authors",
+            "pending_count": pending_count,
+            "pending_signups": pending_signups,
+        },
     )
 
 
+def _ensure_staff(request):
+    """Execute ensure staff."""
+    if not request.user.is_staff:
+        raise Http404
+
+
+@login_required
+@require_POST
+def approve_signup(request, author_id):
+    """Execute approve signup."""
+    _ensure_staff(request)
+    author = get_object_or_404(Author, pk=author_id)
+    author.approved = True
+    author.is_active = True
+    author.save(update_fields=["approved", "is_active"])
+    try:
+        publish_local_author_to_nodes(author)
+    except Exception:
+        logger.exception(
+            "Failed to publish author to remote nodes: %s", author.fqid)
+    return redirect("author_list")
+
+
+@login_required
+@require_POST
+def reject_signup(request, author_id):
+    """Execute reject signup."""
+    _ensure_staff(request)
+    author = get_object_or_404(Author, pk=author_id)
+    if author.pk != request.user.pk:
+        author.delete()
+    return redirect("author_list")
+
+
+@login_required
+@require_POST
+def toggle_author_staff(request, author_id):
+    """Execute toggle author staff."""
+    _ensure_staff(request)
+    author = get_object_or_404(Author, pk=author_id)
+    if author.pk != request.user.pk:
+        author.is_staff = not author.is_staff
+        author.save(update_fields=["is_staff"])
+    return redirect("author_list")
+
+
+@login_required
+@require_POST
+def toggle_author_active(request, author_id):
+    """Execute toggle author active."""
+    _ensure_staff(request)
+    author = get_object_or_404(Author, pk=author_id)
+    if author.pk != request.user.pk:
+        author.is_active = not author.is_active
+        author.save(update_fields=["is_active"])
+    return redirect("author_list")
+
+
+@login_required
+@require_POST
+def delete_author_account(request, author_id):
+    """Delete author account."""
+    _ensure_staff(request)
+    author = get_object_or_404(Author, pk=author_id)
+    if author.pk != request.user.pk:
+        author.delete()
+    return redirect("author_list")
+
+
 def author_profile(request, author_id):
+    """Execute author profile."""
     author = get_object_or_404(Author, pk=author_id)
     fetch_and_create_github_entries(author)
-    entries = author.entries.filter(visibility="PUBLIC").order_by("-published")
+    entries_qs = author.entries.filter(
+        visibility="PUBLIC").order_by("-published")
+    entries = [autils.annotate_profile_entry(entry) for entry in entries_qs]
 
     is_following = False
     has_pending = False
@@ -94,33 +271,202 @@ def author_profile(request, author_id):
             following_fqid=request.user.fqid, accepted=False
         ).count()
 
-    return render(request, "author_profile.html", {
-        "author": author,
-        "entries": entries,
-        "is_following": is_following,
-        "has_pending": has_pending,
-        "active_nav": "authors",
-        "pending_count": pending_count,
-    })
-
-#  ChatGPT5.1, OpenAI, "Help me generate some fuctions to follow/unfollow authors",https://chatgpt.com/, 2026-02-28
+    return render(
+        request,
+        "author_profile.html",
+        {
+            "author": author,
+            "entries": entries,
+            "is_following": is_following,
+            "has_pending": has_pending,
+            "pending_count": pending_count,
+        },
+    )
 
 
 @login_required
 @require_POST
 def follow_author(request, author_id):
+    """Execute follow author."""
     author = get_object_or_404(Author, pk=author_id)
-    Follow.objects.get_or_create(
-        follower_fqid=request.user.fqid,
-        following_fqid=author.fqid,
-        defaults={"accepted": False}
-    )
+    if author.pk != request.user.pk:
+        Follow.objects.get_or_create(
+            follower_fqid=request.user.fqid,
+            following_fqid=author.fqid,
+            defaults={"accepted": False},
+        )
     return redirect("author_profile", author_id=author_id)
 
 
 @login_required
 @require_POST
+def follow_remote_author(request):
+    """Follow a remote author by sending a follow activity to their inbox."""
+    target_fqid = request.POST.get("author_fqid", "").strip()
+    if not target_fqid or "/authors/" not in target_fqid.rstrip("/"):
+        return redirect("author_list")
+
+    node = find_node_for_author_fqid(target_fqid)
+    if node and send_follow_to_inbox(node, request.user, target_fqid):
+        follow, _ = Follow.objects.update_or_create(
+            follower_fqid=request.user.fqid,
+            following_fqid=target_fqid,
+            defaults={"accepted": True},
+        )
+
+    return redirect("author_list")
+
+
+@login_required
+def remote_author_profile(request):
+    """Execute remote author profile."""
+    remote_fqid = request.GET.get("fqid", "").strip()
+    if not remote_fqid:
+        raise Http404
+
+    # Build profile from what we know locally (inbox + follow graph).
+    remote_author = {
+        "id": remote_fqid,
+        "displayName": remote_fqid.rstrip("/").split("/")[-1],
+        "profileImage": "",
+        "host": remote_fqid.split("/api/")[0] + "/" if "/api/" in remote_fqid else remote_fqid,
+    }
+
+    persisted_remote = RemoteAuthor.objects.filter(fqid=remote_fqid).first()
+    if persisted_remote:
+        remote_author = {
+            "id": persisted_remote.fqid,
+            "displayName": persisted_remote.display_name or remote_author["displayName"],
+            "profileImage": persisted_remote.profile_image,
+            "host": persisted_remote.host or remote_author["host"],
+        }
+
+    inbox_items = InboxItem.objects.filter(
+        author=request.user).order_by("-received")
+    for item in inbox_items:
+        payload = item.payload or {}
+        actor = {}
+        if item.type == "follow":
+            actor = payload.get("actor", {})
+        elif item.type in {"entry", "comment", "like"}:
+            actor = payload.get("author", {})
+        actor_fqid = str(actor.get("id", "")).strip()
+        if actor_fqid != remote_fqid:
+            continue
+        remote_author = {
+            "id": remote_fqid,
+            "displayName": actor.get("displayName") or remote_author["displayName"],
+            "profileImage": actor.get("profileImage", remote_author["profileImage"]),
+            "host": actor.get("host") or remote_author["host"],
+        }
+        break
+
+    remote_fqid_norm = str(remote_fqid).strip().rstrip("/")
+    my_follows = Follow.objects.filter(
+        follower_fqid=request.user.fqid,
+    ).values("following_fqid", "accepted")
+
+    is_following = any(
+        str(row.get("following_fqid", "")).strip().rstrip(
+            "/") == remote_fqid_norm
+        and bool(row.get("accepted"))
+        for row in my_follows
+    )
+    has_pending = any(
+        str(row.get("following_fqid", "")).strip().rstrip(
+            "/") == remote_fqid_norm
+        and not bool(row.get("accepted"))
+        for row in my_follows
+    )
+
+    remote_entries = []
+    for item in InboxItem.objects.filter(author=request.user, type="entry").order_by("-received"):
+        payload = item.payload or {}
+        author_data = payload.get("author", {})
+        if str(author_data.get("id", "")).strip() != remote_fqid:
+            continue
+
+        visibility = str(payload.get("visibility", "PUBLIC")
+                         or "PUBLIC").upper()
+        if visibility != "PUBLIC":
+            continue
+
+        content = payload.get("content", "")
+        content_type = str(payload.get(
+            "contentType", "text/plain") or "text/plain")
+        display_has_image = cutils.is_base64_image_content_type(content_type)
+        remote_entries.append(
+            SimpleNamespace(
+                title=payload.get("title", ""),
+                content=content if isinstance(
+                    content, str) else json.dumps(content),
+                content_type=content_type,
+                visibility=visibility,
+                published=item.received,
+                display_is_markdown="text/markdown" in content_type,
+                display_has_image=display_has_image,
+                display_image_src=(
+                    cutils.data_url_from_entry_content(content_type, content)
+                    if isinstance(content, str)
+                    else ""
+                ),
+                display_text=(
+                    ""
+                    if display_has_image
+                    else (content if isinstance(content, str) else json.dumps(content))
+                ).lstrip(),
+            )
+        )
+
+    pending_count = Follow.objects.filter(
+        following_fqid=request.user.fqid, accepted=False
+    ).count()
+
+    return render(
+        request,
+        "remote_author_profile.html",
+        {
+            "author": remote_author,
+            "entries": remote_entries,
+            "is_following": is_following,
+            "has_pending": has_pending,
+            "pending_count": pending_count,
+            "remote_fqid": remote_fqid,
+        },
+    )
+
+
+@login_required
+@require_POST
+def unfollow_remote_author(request):
+    """Execute unfollow remote author."""
+    target_fqid = request.POST.get("author_fqid", "").strip()
+    if not target_fqid:
+        return redirect("author_list")
+
+    node = find_node_for_author_fqid(target_fqid)
+    if node:
+        send_follow_to_inbox(
+            node,
+            request.user,
+            target_fqid,
+            follow_status="UNFOLLOW",
+        )
+
+    # Delete follow records matching common FQID variants (api vs web, trailing slash)
+    norm = target_fqid.rstrip("/")
+    web = api_to_web_url(target_fqid).rstrip("/")
+    variants = {norm, web}
+    Follow.objects.filter(follower_fqid=request.user.fqid,
+                          following_fqid__in=variants).delete()
+
+    return redirect(f"/authors/remote-profile/?fqid={quote(target_fqid)}")
+
+
+@login_required
+@require_POST
 def unfollow_author(request, author_id):
+    """Execute unfollow author."""
     author = get_object_or_404(Author, pk=author_id)
     from social.models import Follow
     Follow.objects.filter(
@@ -133,7 +479,7 @@ def unfollow_author(request, author_id):
 @login_required
 @require_POST
 def approve_follow(request, author_id):
-    """Accept a pending follow request from author_id."""
+    """Accept a pending follow request from a local author_id."""
     follower = get_object_or_404(Author, pk=author_id)
     follow = Follow.objects.filter(
         follower_fqid=follower.fqid,
@@ -142,21 +488,92 @@ def approve_follow(request, author_id):
     ).first()
     if follow:
         follow.accepted = True
-        follow.save()
-    return redirect("profile")
+        follow.save(update_fields=["accepted"])
+        if cutils.is_remote_fqid(follower.fqid):
+            node = find_node_for_author_fqid(follower.fqid)
+            if node:
+                send_follow_to_inbox(
+                    node,
+                    follower.fqid,
+                    request.user.fqid,
+                    follow_status="ACCEPTED",
+                )
+    return redirect("follow_requests_page")
 
 
 @login_required
 @require_POST
 def deny_follow(request, author_id):
-    """Reject (delete) a pending follow request from author_id."""
+    """Reject (delete) a pending follow request from a local author_id."""
     follower = get_object_or_404(Author, pk=author_id)
-    Follow.objects.filter(
+    deleted, _ = Follow.objects.filter(
         follower_fqid=follower.fqid,
         following_fqid=request.user.fqid,
         accepted=False,
     ).delete()
-    return redirect("profile")
+    if deleted and cutils.is_remote_fqid(follower.fqid):
+        node = find_node_for_author_fqid(follower.fqid)
+        if node:
+            send_follow_to_inbox(
+                node,
+                follower.fqid,
+                request.user.fqid,
+                follow_status="REJECTED",
+            )
+    return redirect("follow_requests_page")
+
+
+@login_required
+@require_POST
+def approve_follow_by_fqid(request):
+    """Accept a pending follow request from a remote author (by FQID)."""
+    follower_fqid = request.POST.get("follower_fqid", "").strip()
+    if not follower_fqid:
+        return redirect("follow_requests_page")
+
+    follow = Follow.objects.filter(
+        follower_fqid=follower_fqid,
+        following_fqid=request.user.fqid,
+        accepted=False,
+    ).first()
+    if follow:
+        follow.accepted = True
+        follow.save(update_fields=["accepted"])
+        node = find_node_for_author_fqid(follower_fqid)
+        if node:
+            send_follow_to_inbox(
+                node,
+                follower_fqid,
+                request.user.fqid,
+                follow_status="ACCEPTED",
+            )
+
+    return redirect("follow_requests_page")
+
+
+@login_required
+@require_POST
+def deny_follow_by_fqid(request):
+    """Reject (delete) a pending follow request from a remote author (by FQID)."""
+    follower_fqid = request.POST.get("follower_fqid", "").strip()
+    if not follower_fqid:
+        return redirect("follow_requests_page")
+
+    Follow.objects.filter(
+        follower_fqid=follower_fqid,
+        following_fqid=request.user.fqid,
+    ).delete()
+
+    node = find_node_for_author_fqid(follower_fqid)
+    if node:
+        send_follow_to_inbox(
+            node,
+            follower_fqid,
+            request.user.fqid,
+            follow_status="REJECTED",
+        )
+
+    return redirect("follow_requests_page")
 
 
 @login_required
@@ -169,7 +586,14 @@ def edit_profile(request):
     if request.method == "POST":
         form = ProfileEditForm(request.POST, instance=request.user)
         if form.is_valid():
-            form.save()
+            author = form.save()
+            try:
+                publish_local_author_to_nodes(author)
+            except Exception:
+                logger.exception(
+                    "Failed to publish updated author to remote nodes: %s",
+                    author.fqid,
+                )
             return redirect("profile")
     else:
         form = ProfileEditForm(instance=request.user)
@@ -181,18 +605,7 @@ def edit_profile(request):
 # REST API helpers
 # =============================================================================
 
-def _resolve_author(fqid, context):
-    """Return a serialized author dict for `fqid`.
-
-    Falls back to a minimal stub ``{"type": "author", "id": fqid}`` if the
-    author is not found in the local database (e.g. a remote author whose
-    profile hasn't been cached yet).
-    """
-    try:
-        author = Author.objects.get(fqid=fqid)
-        return AuthorSerializer(author, context=context).data
-    except Author.DoesNotExist:
-        return {"type": "author", "id": fqid}
+# No local wrapper; use autils.resolve_author directly
 
 
 # =============================================================================
@@ -220,7 +633,13 @@ class AuthorListAPIView(APIView):
         }
     """
 
+    permission_classes = []
+
     def get(self, request):
+        """Execute get."""
+        auth_error = _require_remote_or_local_api_auth(request)
+        if auth_error is not None:
+            return auth_error
         qs = Author.objects.filter(approved=True).order_by("display_name")
         paginator = AuthorsPagination()
         page = paginator.paginate_queryset(qs, request)
@@ -236,13 +655,25 @@ class AuthorDetailAPIView(APIView):
                                         (must be authenticated as that author).
     """
 
+    permission_classes = []
+
     def get(self, request, author_fqid):
+        """Execute get."""
+        auth_error = _require_remote_or_local_api_auth(request)
+        if auth_error is not None:
+            return auth_error
         author = get_object_or_404(Author, pk=author_fqid)
         return Response(AuthorSerializer(author, context={"request": request}).data)
 
     def put(self, request, author_fqid):
+        """Execute put."""
         author = get_object_or_404(Author, pk=author_fqid)
-        if not request.user.is_authenticated or request.user.pk != author.pk:
+        if not request.user.is_authenticated:
+            return Response(
+                {"detail": "Authentication required."},
+                status=drf_status.HTTP_401_UNAUTHORIZED,
+            )
+        if request.user.pk != author.pk:
             return Response(
                 {"detail": "Forbidden."}, status=drf_status.HTTP_403_FORBIDDEN
             )
@@ -250,7 +681,14 @@ class AuthorDetailAPIView(APIView):
             author, data=request.data, partial=True, context={"request": request}
         )
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        author = serializer.save()
+        try:
+            publish_local_author_to_nodes(author)
+        except Exception:
+            logger.exception(
+                "Failed to publish updated author to remote nodes: %s",
+                author.fqid,
+            )
         return Response(serializer.data)
 
 
@@ -265,9 +703,23 @@ class AuthorFQIDAPIView(APIView):
         GET /api/authors/http%3A%2F%2Fnodeaaaa%2Fapi%2Fauthors%2F111
     """
 
+    permission_classes = []
+
     def get(self, request, fqid):
+        """Execute get."""
+        auth_error = _require_remote_or_local_api_auth(request)
+        if auth_error is not None:
+            return auth_error
         decoded = unquote(fqid)
-        author = get_object_or_404(Author, fqid=decoded)
+        author = Author.objects.filter(fqid=decoded).first()
+        if not author:
+            serial = serial_from_fqid(decoded).strip()
+            try:
+                author = Author.objects.filter(pk=uuid.UUID(serial)).first()
+            except ValueError:
+                author = None
+        if not author:
+            raise Http404("No Author matches the given query.")
         return Response(AuthorSerializer(author, context={"request": request}).data)
 
 
@@ -294,6 +746,7 @@ class FollowingListAPIView(APIView):
     """
 
     def get(self, request, author_fqid):
+        """Execute get."""
         author = get_object_or_404(Author, pk=author_fqid)
         if not request.user.is_authenticated or request.user.pk != author.pk:
             return Response(
@@ -315,7 +768,7 @@ class FollowingListAPIView(APIView):
         paginator = Paginator(fqids, size)
         page = paginator.get_page(page_num)
         ctx = {"request": request}
-        items = [_resolve_author(f, ctx) for f in page.object_list]
+        items = [autils.resolve_author(f, ctx) for f in page.object_list]
         return Response(
             {
                 "type": "following",
@@ -341,11 +794,13 @@ class FollowingDetailAPIView(APIView):
     """
 
     def _follow(self, author, decoded_fqid):
+        """Execute follow."""
         return Follow.objects.filter(
             follower_fqid=author.fqid, following_fqid=decoded_fqid
         ).first()
 
     def get(self, request, author_fqid, foreign_fqid):
+        """Execute get."""
         author = get_object_or_404(Author, pk=author_fqid)
         if not request.user.is_authenticated or request.user.pk != author.pk:
             return Response(
@@ -356,9 +811,10 @@ class FollowingDetailAPIView(APIView):
         follow = self._follow(author, decoded)
         if not follow or not follow.accepted:
             raise Http404
-        return Response(_resolve_author(decoded, {"request": request}))
+        return Response(autils.resolve_author(decoded, {"request": request}))
 
     def put(self, request, author_fqid, foreign_fqid):
+        """Execute put."""
         author = get_object_or_404(Author, pk=author_fqid)
         if not request.user.is_authenticated or request.user.pk != author.pk:
             return Response(
@@ -366,10 +822,20 @@ class FollowingDetailAPIView(APIView):
                 status=drf_status.HTTP_401_UNAUTHORIZED,
             )
         decoded = unquote(foreign_fqid)
-        _, created = Follow.objects.get_or_create(
+        defaults = {"accepted": False}
+        node = find_node_for_author_fqid(decoded)
+        if cutils.is_remote_fqid(decoded) and node:
+            if not send_follow_to_inbox(node, author, decoded):
+                return Response(
+                    {"detail": "Could not deliver follow request to remote node."},
+                    status=drf_status.HTTP_502_BAD_GATEWAY,
+                )
+            defaults["accepted"] = True
+
+        _, created = Follow.objects.update_or_create(
             follower_fqid=author.fqid,
             following_fqid=decoded,
-            defaults={"accepted": False},
+            defaults=defaults,
         )
         if created:
             return Response(
@@ -382,6 +848,7 @@ class FollowingDetailAPIView(APIView):
         )
 
     def delete(self, request, author_fqid, foreign_fqid):
+        """Execute delete."""
         author = get_object_or_404(Author, pk=author_fqid)
         if not request.user.is_authenticated or request.user.pk != author.pk:
             return Response(
@@ -392,6 +859,15 @@ class FollowingDetailAPIView(APIView):
         deleted, _ = Follow.objects.filter(
             follower_fqid=author.fqid, following_fqid=decoded
         ).delete()
+        if deleted and cutils.is_remote_fqid(decoded):
+            node = find_node_for_author_fqid(decoded)
+            if node:
+                send_follow_to_inbox(
+                    node,
+                    author,
+                    decoded,
+                    follow_status="UNFOLLOW",
+                )
         if not deleted:
             raise Http404
         return Response(status=drf_status.HTTP_204_NO_CONTENT)
@@ -420,6 +896,7 @@ class FollowerListAPIView(APIView):
     """
 
     def get(self, request, author_fqid):
+        """Execute get."""
         author = get_object_or_404(Author, pk=author_fqid)
         fqids = list(
             Follow.objects.filter(following_fqid=author.fqid, accepted=True)
@@ -435,7 +912,7 @@ class FollowerListAPIView(APIView):
         paginator = Paginator(fqids, size)
         page = paginator.get_page(page_num)
         ctx = {"request": request}
-        items = [_resolve_author(f, ctx) for f in page.object_list]
+        items = [autils.resolve_author(f, ctx) for f in page.object_list]
         return Response(
             {
                 "type": "followers",
@@ -463,19 +940,22 @@ class FollowerDetailAPIView(APIView):
     """
 
     def _follow(self, author, decoded_fqid):
+        """Execute follow."""
         return Follow.objects.filter(
             follower_fqid=decoded_fqid, following_fqid=author.fqid
         ).first()
 
     def get(self, request, author_fqid, foreign_fqid):
+        """Execute get."""
         author = get_object_or_404(Author, pk=author_fqid)
         decoded = unquote(foreign_fqid)
         follow = self._follow(author, decoded)
         if not follow or not follow.accepted:
             raise Http404
-        return Response(_resolve_author(decoded, {"request": request}))
+        return Response(autils.resolve_author(decoded, {"request": request}))
 
     def put(self, request, author_fqid, foreign_fqid):
+        """Execute put."""
         author = get_object_or_404(Author, pk=author_fqid)
         if not request.user.is_authenticated or request.user.pk != author.pk:
             return Response(
@@ -490,10 +970,20 @@ class FollowerDetailAPIView(APIView):
                 status=drf_status.HTTP_404_NOT_FOUND,
             )
         follow.accepted = True
-        follow.save()
-        return Response(_resolve_author(decoded, {"request": request}))
+        follow.save(update_fields=["accepted"])
+        if cutils.is_remote_fqid(decoded):
+            node = find_node_for_author_fqid(decoded)
+            if node:
+                send_follow_to_inbox(
+                    node,
+                    decoded,
+                    author.fqid,
+                    follow_status="ACCEPTED",
+                )
+        return Response(autils.resolve_author(decoded, {"request": request}))
 
     def delete(self, request, author_fqid, foreign_fqid):
+        """Execute delete."""
         author = get_object_or_404(Author, pk=author_fqid)
         if not request.user.is_authenticated or request.user.pk != author.pk:
             return Response(
@@ -504,6 +994,15 @@ class FollowerDetailAPIView(APIView):
         deleted, _ = Follow.objects.filter(
             follower_fqid=decoded, following_fqid=author.fqid
         ).delete()
+        if deleted and cutils.is_remote_fqid(decoded):
+            node = find_node_for_author_fqid(decoded)
+            if node:
+                send_follow_to_inbox(
+                    node,
+                    decoded,
+                    author.fqid,
+                    follow_status="REJECTED",
+                )
         if not deleted:
             raise Http404
         return Response(status=drf_status.HTTP_204_NO_CONTENT)
@@ -537,6 +1036,7 @@ class FollowRequestsAPIView(APIView):
     """
 
     def get(self, request, author_fqid):
+        """Execute get."""
         author = get_object_or_404(Author, pk=author_fqid)
         if not request.user.is_authenticated or request.user.pk != author.pk:
             return Response(
@@ -552,7 +1052,7 @@ class FollowRequestsAPIView(APIView):
         object_data = AuthorSerializer(author, context=ctx).data
         requests_list = []
         for f in pending:
-            actor_data = _resolve_author(f.follower_fqid, ctx)
+            actor_data = autils.resolve_author(f.follower_fqid, ctx)
             requests_list.append(
                 {
                     "type": "follow",
@@ -566,112 +1066,3 @@ class FollowRequestsAPIView(APIView):
             )
 
         return Response({"type": "follow_requests", "follow_requests": requests_list})
-
-
-class InboxAPIView(APIView):
-    """
-    POST /api/authors/{AUTHOR_SERIAL}/inbox
-
-    Receives a follow request sent by a remote node on behalf of a remote
-    author (the "actor") who wants to follow the local AUTHOR_SERIAL (the
-    "object").  Creates a pending Follow record (accepted=False).
-
-    Expected body::
-
-        {
-            "type": "follow",
-            "summary": "actor wants to follow object",
-            "actor":  { "type": "author", "id": "<actor FQID>", ... },
-            "object": { "type": "author", "id": "<AUTHOR_SERIAL FQID>", ... }
-        }
-    """
-
-    def post(self, request, author_fqid):
-        author = get_object_or_404(Author, pk=author_fqid)
-        data = request.data
-
-        item_type = str(data.get("type", "")).strip().lower()
-        if item_type not in {"follow", "comment", "like"}:
-            return Response(
-                {"detail": "Unsupported inbox item type. Expected one of: follow, comment, like."},
-                status=drf_status.HTTP_400_BAD_REQUEST,
-            )
-
-        if item_type == "follow":
-            actor = data.get("actor", {})
-            actor_fqid = (actor.get("id") or "").strip()
-            if not actor_fqid:
-                return Response(
-                    {"detail": "actor.id is required."},
-                    status=drf_status.HTTP_400_BAD_REQUEST,
-                )
-
-            _, created = Follow.objects.get_or_create(
-                follower_fqid=actor_fqid,
-                following_fqid=author.fqid,
-                defaults={"accepted": False},
-            )
-            return Response(
-                {
-                    "detail": (
-                        "Follow request received."
-                        if created
-                        else "Follow request already exists."
-                    )
-                },
-                status=drf_status.HTTP_201_CREATED if created else drf_status.HTTP_200_OK,
-            )
-
-        if item_type == "comment":
-            comment_id = str(data.get("id", "")).strip()
-            author_obj = data.get("author", {})
-            comment_author_fqid = str(author_obj.get("id", "")).strip()
-            entry_fqid = str(data.get("entry", "")).strip()
-            comment_text = str(data.get("comment", "")).strip()
-            content_type = str(
-                data.get("contentType", "text/plain")).strip() or "text/plain"
-
-            if not comment_author_fqid or not entry_fqid or not comment_text:
-                return Response(
-                    {"detail": "comment.author.id, comment.entry, and comment.comment are required."},
-                    status=drf_status.HTTP_400_BAD_REQUEST,
-                )
-
-            comment_fqid = comment_id or f"{author.host}authors/{author.id}/commented/{uuid.uuid4()}"
-            _, created = Comment.objects.get_or_create(
-                fqid=comment_fqid,
-                defaults={
-                    "author_fqid": comment_author_fqid,
-                    "entry_fqid": entry_fqid,
-                    "comment": comment_text,
-                    "content_type": content_type,
-                },
-            )
-            return Response(
-                {"detail": "Comment received." if created else "Comment already exists."},
-                status=drf_status.HTTP_201_CREATED if created else drf_status.HTTP_200_OK,
-            )
-
-        like_id = str(data.get("id", "")).strip()
-        author_obj = data.get("author", {})
-        like_author_fqid = str(author_obj.get("id", "")).strip()
-        object_fqid = str(data.get("object", "")).strip()
-
-        if not like_author_fqid or not object_fqid:
-            return Response(
-                {"detail": "like.author.id and like.object are required."},
-                status=drf_status.HTTP_400_BAD_REQUEST,
-            )
-
-        like_fqid = like_id or f"{author.host}authors/{author.id}/liked/{uuid.uuid4()}"
-        _, created = Like.objects.get_or_create(
-            fqid=like_fqid,
-            defaults={
-                "author_fqid": like_author_fqid,
-                "object_fqid": object_fqid,
-            },
-        )
-        return Response(
-            {"detail": "Like received." if created else "Like already exists."},
-            status=drf_status.HTTP_201_CREATED if created else drf_status.HTTP_200_OK,
-        )

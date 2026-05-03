@@ -32,6 +32,7 @@ class EntriesPagination(PageNumberPagination):
     response_type = "entries"
 
     def get_paginated_response(self, data):
+        """Return paginated response."""
         return Response(
             {
                 "type": self.response_type,
@@ -44,6 +45,7 @@ class EntriesPagination(PageNumberPagination):
 
     # for DRF spectacular / docs
     def get_paginated_response_schema(self, schema):
+        """Return paginated response schema."""
         return {
             "type": "object",
             "properties": {
@@ -92,6 +94,7 @@ class AuthorsPagination(EntriesPagination):
     max_page_size = 50
 
     def get_paginated_response(self, data):
+        """Return paginated response."""
         return Response(
             {
                 "type": self.response_type,
@@ -101,3 +104,18 @@ class AuthorsPagination(EntriesPagination):
                 "authors": data,
             }
         )
+
+def parse_pagination(request, default_size, max_size):
+    """Execute parse pagination."""
+    try:
+        page_num = max(1, int(request.GET.get("page", 1)))
+    except (TypeError, ValueError):
+        page_num = 1
+
+    try:
+        requested_size = int(request.GET.get("size", default_size))
+    except (TypeError, ValueError):
+        requested_size = default_size
+
+    size = min(max(1, requested_size), max_size)
+    return page_num, size

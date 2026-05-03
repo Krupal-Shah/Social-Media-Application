@@ -1,3 +1,5 @@
+"""Serializer definitions for the authors app."""
+
 from rest_framework import serializers
 from .models import Author
 
@@ -26,6 +28,7 @@ class AuthorSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "host"]
 
     def get_type(self, obj):
+        """Return type."""
         return "author"
 
     def get_web(self, obj):
@@ -33,6 +36,7 @@ class AuthorSerializer(serializers.ModelSerializer):
         return obj.web
 
     def update(self, instance, validated_data):
+        """Execute update."""
         instance.display_name = validated_data.get(
             "display_name", instance.display_name
         )

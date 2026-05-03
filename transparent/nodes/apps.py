@@ -1,3 +1,5 @@
+"""Application configuration for the nodes app."""
+
 from django.apps import AppConfig
 
 

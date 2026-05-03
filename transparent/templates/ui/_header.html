@@ -36,17 +36,6 @@
       </svg>
     </a>
     <a
-      href="/explore/"
-      class="navbar__nav-item {% if active_nav == 'explore' %}navbar__nav-item--active{% endif %}"
-      title="Explore"
-    >
-      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path
-          d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm3.21 6.79-2.03 5.41-5.39 2.01 2.01-5.39 5.41-2.03zm-3.21 11.21a8 8 0 110-16 8 8 0 010 16z"
-        />
-      </svg>
-    </a>
-    <a
       href="/authors/"
       class="navbar__nav-item {% if active_nav == 'authors' %}navbar__nav-item--active{% endif %}"
       title="Authors"
@@ -89,9 +78,37 @@
       >
       {% endif %}
     </a>
+    {% if request.user.is_staff %}
+    <a
+      href="/nodes/"
+      class="navbar__nav-item {% if active_nav == 'nodes' %}navbar__nav-item--active{% endif %}"
+      title="Nodes"
+    >
+      <svg viewBox="0 0 24 24" fill="currentColor">
+        <path
+          d="M17 8C8 10 5.9 16.17 3.82 22H5.71c.19-.53.38-1.07.59-1.59C7.62 19.11 9.68 18 12 18c3.31 0 6-2.69 6-6 0-.34-.03-.67-.07-1H20V9l-3-1zm0 8c-1.38 0-2.63-.56-3.54-1.46C14.43 13.38 15.5 12 17 12c1.1 0 2 .9 2 2s-.9 2-2 2z"
+        />
+      </svg>
+    </a>
+    {% endif %}
   </nav>
 
   <div class="navbar__right">
+    {% if request.user.is_staff %}
+    <span
+      style="
+        margin-right: 10px;
+        font-size: 0.72rem;
+        letter-spacing: 0.08em;
+        font-weight: 800;
+        color: #ffffff;
+        background: #c0392b;
+        border-radius: 999px;
+        padding: 4px 10px;
+      "
+      >ADMIN</span
+    >
+    {% endif %}
     <form class="navbar__logout" method="post" action="{% url 'logout' %}">
       {% csrf_token %}
       <button type="submit" class="navbar__logout-btn">Log out</button>

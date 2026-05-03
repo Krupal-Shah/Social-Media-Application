@@ -1,4 +1,3 @@
-
 /* The following css file is written by Github Copilot, "I want you 
 to create an instagram sort of profile page sort of this
  picture that I have pasted wherre for now you have the 
@@ -529,3 +528,13 @@ to create an instagram sort of profile page sort of this
 
   .profile-avatar-circle span { font-size: 36px; }
 }
+
+/* ── Clickable stats ────────────────────────────────────── */
+.profile-stat--clickable {
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 4px 8px;
+  margin: -4px -8px;
+  transition: background 0.15s;
+}
+.profile-stat--clickable:hover { background: var(--surface-hover, #f0f0f0); }

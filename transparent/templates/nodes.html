@@ -1,0 +1,361 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="{% static 'base.css' %}" />
+    <link rel="stylesheet" href="{% static 'stream.css' %}" />
+    <title>Transparent &mdash; Node Management</title>
+    <style>
+      .nodes-wrap {
+        max-width: 760px;
+        margin: calc(var(--navbar-height) + 24px) auto 40px;
+        padding: 0 12px;
+      }
+
+      .nodes-page-title {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+      }
+
+      .nodes-page-subtitle {
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+        margin-bottom: 20px;
+      }
+
+      /* Add node card */
+      .nodes-add-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        margin-bottom: 24px;
+        box-shadow: var(--shadow);
+      }
+
+      .nodes-add-card__title {
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .nodes-add-card__title::before {
+        content: "+";
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        background: var(--primary);
+        color: #fff;
+        border-radius: 50%;
+        font-size: 1rem;
+        font-weight: 700;
+        flex-shrink: 0;
+      }
+
+      .nodes-field {
+        margin-bottom: 12px;
+      }
+
+      .nodes-field label {
+        display: block;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        margin-bottom: 5px;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+      }
+
+      .nodes-field input {
+        width: 100%;
+        border: 1px solid var(--border-input);
+        border-radius: var(--radius);
+        padding: 9px 12px;
+        font-size: 0.9rem;
+        background: var(--surface);
+        color: var(--text-primary);
+        transition: border-color 0.15s;
+      }
+
+      .nodes-field input:focus {
+        outline: none;
+        border-color: var(--primary);
+      }
+
+      .nodes-add-error {
+        font-size: 0.82rem;
+        color: var(--error-color);
+        background: var(--error-bg);
+        border: 1px solid var(--error-border);
+        border-radius: var(--radius);
+        padding: 8px 12px;
+        margin-bottom: 12px;
+      }
+
+      .nodes-flash {
+        font-size: 0.82rem;
+        border-radius: var(--radius);
+        padding: 10px 12px;
+        margin-bottom: 12px;
+        border: 1px solid var(--border);
+      }
+
+      .nodes-flash--success {
+        color: #166534;
+        background: #dcfce7;
+        border-color: #86efac;
+      }
+
+      .nodes-flash--error {
+        color: #991b1b;
+        background: #fee2e2;
+        border-color: #fca5a5;
+      }
+
+      .nodes-flash--warning,
+      .nodes-flash--info {
+        color: #92400e;
+        background: #fef3c7;
+        border-color: #fcd34d;
+      }
+
+      /* Node row card */
+      .node-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 14px 16px;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        box-shadow: var(--shadow);
+        transition: box-shadow 0.15s;
+      }
+
+      .node-card:hover {
+        box-shadow: var(--shadow-card);
+      }
+
+      .node-card--disabled {
+        opacity: 0.6;
+      }
+
+      .node-card__left {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        min-width: 0;
+      }
+
+      /* Status dot */
+      .node-status-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        margin-top: 5px;
+      }
+
+      .node-status-dot--active {
+        background: #22c55e;
+        box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.15);
+      }
+      .node-status-dot--disabled {
+        background: #ef4444;
+        box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+      }
+
+      .node-card__url {
+        font-weight: 600;
+        font-size: 0.9rem;
+        color: var(--text-primary);
+        word-break: break-all;
+      }
+
+      .node-card__meta {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        margin-top: 3px;
+      }
+
+      .node-badge {
+        display: inline-block;
+        padding: 1px 7px;
+        border-radius: 20px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+      }
+
+      .node-badge--active {
+        background: #dcfce7;
+        color: #15803d;
+      }
+      .node-badge--disabled {
+        background: #fee2e2;
+        color: #b91c1c;
+      }
+
+      .node-card__actions {
+        display: flex;
+        gap: 8px;
+        flex-shrink: 0;
+      }
+
+      /* Empty state */
+      .nodes-empty {
+        text-align: center;
+        padding: 48px 20px;
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+        background: var(--surface);
+        border: 1px dashed var(--border);
+        border-radius: var(--radius-lg);
+      }
+
+      .nodes-empty__icon {
+        font-size: 2rem;
+        margin-bottom: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    {% include "ui/_header.html" %}
+
+    <main class="nodes-wrap">
+      <div class="nodes-page-title">Remote Nodes</div>
+      <div class="nodes-page-subtitle">
+        Manage the nodes your server connects and shares with.
+      </div>
+
+      {% if messages %}
+      {% for message in messages %}
+      <div class="nodes-flash nodes-flash--{{ message.tags|default:'info' }}">
+        {{ message }}
+      </div>
+      {% endfor %}
+      {% endif %}
+
+      <!-- Add node form -->
+      <div class="nodes-add-card">
+        <div class="nodes-add-card__title">Connect a new node</div>
+        <form method="post" action="{% url 'nodes_add' %}">
+          {% csrf_token %}
+          <div class="nodes-field">
+            <label>Node URL</label>
+            <input
+              type="url"
+              name="base_url"
+              placeholder="https://remote-node.herokuapp.com/api/"
+              required
+            />
+          </div>
+          <div class="nodes-field">
+            <label>Username</label>
+            <input
+              type="text"
+              name="username"
+              placeholder="username"
+              required
+            />
+          </div>
+          <div class="nodes-field">
+            <label>Password</label>
+            <input
+              type="password"
+              name="password"
+              placeholder="password"
+              required
+            />
+          </div>
+          {% if add_error %}
+          <div class="nodes-add-error">{{ add_error }}</div>
+          {% endif %}
+          <button
+            type="submit"
+            class="overlay-btn overlay-btn--primary"
+            style="margin-top: 4px"
+          >
+            Add Node
+          </button>
+        </form>
+      </div>
+
+      <!-- Node list -->
+      {% for node in nodes %}
+      <div
+        class="node-card {% if not node.active %}node-card--disabled{% endif %}"
+      >
+        <div class="node-card__left">
+          <span
+            class="node-status-dot {% if node.active %}node-status-dot--active{% else %}node-status-dot--disabled{% endif %}"
+          ></span>
+          <div>
+            <div class="node-card__url">{{ node.base_url }}</div>
+            <div class="node-card__meta">
+              User: {{ node.username }} &nbsp;&middot;&nbsp;
+              <span
+                class="node-badge {% if node.active %}node-badge--active{% else %}node-badge--disabled{% endif %}"
+                >{% if node.active %}Active{% else %}Disabled{% endif %}</span
+              >
+              <br />
+              {% if node.last_sync_attempt_at %}
+              Last sync: {{ node.last_sync_attempt_at }}
+              {% else %}
+              Last sync: never
+              {% endif %}
+              <br />
+              Cached remote authors: {{ node.last_sync_count }}
+              {% if node.last_sync_error %}
+              <br />
+              Sync error: {{ node.last_sync_error }}
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        <div class="node-card__actions">
+          <form method="post" action="{% url 'nodes_toggle' node.pk %}">
+            {% csrf_token %}
+            <button
+              type="submit"
+              class="overlay-btn {% if node.active %}overlay-btn--secondary{% else %}overlay-btn--primary{% endif %}"
+            >
+              {% if node.active %}Disable{% else %}Enable{% endif %}
+            </button>
+          </form>
+          <form method="post" action="{% url 'nodes_delete' node.pk %}">
+            {% csrf_token %}
+            <button
+              type="submit"
+              class="overlay-btn overlay-btn--danger"
+              onclick="return confirm('Remove this node?');"
+            >
+              Remove
+            </button>
+          </form>
+        </div>
+      </div>
+      {% empty %}
+      <div class="nodes-empty">
+        <div class="nodes-empty__icon">&#127760;</div>
+        <div>No remote nodes connected yet.</div>
+        <div style="margin-top: 4px; font-size: 0.8rem">
+          Use the form above to add your first node.
+        </div>
+      </div>
+      {% endfor %}
+    </main>
+  </body>
+</html>

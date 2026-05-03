@@ -1,0 +1,220 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="{% static 'base.css' %}" />
+    <link rel="stylesheet" href="{% static 'stream.css' %}" />
+    <script src="{% static 'entry_detail.js' %}" type="module" defer></script>
+    <title>Transparent &mdash; {{ entry.title|default:"Remote Entry" }}</title>
+  </head>
+  <body>
+    {% include "ui/_header.html" %}
+
+    <main class="feed-layout">
+      <div style="margin-bottom: 12px">
+        <a
+          href="javascript:history.back()"
+          style="color: var(--primary); font-size: 0.9rem; font-weight: 600"
+        >
+          &larr; Back
+        </a>
+      </div>
+
+      <article class="entry-card">
+        <div class="entry-card__header">
+          <div class="entry-card__avatar">
+            {% if entry.author.profile_image %}
+            <img
+              src="{{ entry.author.profile_image }}"
+              alt="{{ entry.author.display_name }}"
+            />
+            {% else %}
+            <span>{{ entry.author.display_name|first|upper }}</span>
+            {% endif %}
+          </div>
+          <div class="entry-card__meta">
+            <span class="entry-card__author"
+              >{{ entry.author.display_name }}</span
+            >
+            <span class="entry-card__date"
+              >{{ entry.published|timesince }} ago</span
+            >
+          </div>
+          <span
+            class="entry-card__visibility entry-card__visibility--{{ entry.visibility|lower }}"
+          >
+            {{ entry.visibility }}
+          </span>
+        </div>
+
+        {% if entry.title %}
+        <h2 class="entry-card__title">{{ entry.title }}</h2>
+        {% endif %} {% if entry.description %}
+        <p class="entry-card__description">{{ entry.description }}</p>
+        {% endif %}
+
+        <div class="entry-card__content">
+          {% if entry.display_text %} {% if entry.display_is_markdown %}
+          <div
+            class="entry-card__content-markdown"
+            data-markdown="{{ entry.display_text|escape }}"
+          ></div>
+          {% else %}
+          <p class="entry-card__content-plain">
+            {{ entry.display_text|striptags }}
+          </p>
+          {% endif %} {% endif %} {% if entry.display_has_image %}
+          <img
+            src="{{ entry.display_image_src }}"
+            alt="Post image"
+            class="entry-card__content-image"
+          />
+          {% endif %}
+        </div>
+
+        <div class="entry-card__footer">
+          <form
+            method="post"
+            action="/api/entries/remote/like/"
+            style="display: inline"
+          >
+            {% csrf_token %}
+            <input type="hidden" name="entry_fqid" value="{{ entry.fqid }}" />
+            <input
+              type="hidden"
+              name="target_author_fqid"
+              value="{{ entry.target_author_fqid|default:entry.author.id }}"
+            />
+            <input
+              type="hidden"
+              name="next"
+              value="{{ request.get_full_path }}"
+            />
+            <button class="entry-card__footer-btn" type="submit">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path
+                  d="M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z"
+                />
+              </svg>
+              {% if entry.liked_by_me %}Liked{% else %}Like{% endif %} ({{entry.likes_count }})
+            </button>
+          </form>
+          <a class="entry-card__footer-btn" href="#comments"
+            >Comments ({{ entry.comments_count }})</a
+          >
+        </div>
+      </article>
+
+      <section class="entry-card" id="comments" style="margin-top: 12px">
+        <div class="entry-card__header" style="padding-bottom: 0">
+          <div class="entry-card__meta">
+            <span class="entry-card__author">Comments</span>
+            <span class="entry-card__date"
+              >{{ entry.comments_count }} total</span
+            >
+          </div>
+        </div>
+
+        <form
+          method="post"
+          action="/api/entries/remote/comment/"
+          style="padding: 12px 16px; border-top: 1px solid var(--border)"
+        >
+          {% csrf_token %}
+          <input type="hidden" name="entry_fqid" value="{{ entry.fqid }}" />
+          <input
+            type="hidden"
+            name="target_author_fqid"
+            value="{{ entry.target_author_fqid|default:entry.author.id }}"
+          />
+          <input
+            type="hidden"
+            name="next"
+            value="{{ request.get_full_path }}"
+          />
+          <textarea
+            name="comment"
+            rows="3"
+            placeholder="Write a witty reply..."
+            style="
+              width: 100%;
+              border: 1px solid var(--border);
+              border-radius: 8px;
+              padding: 10px;
+              resize: vertical;
+              font: inherit;
+            "
+          ></textarea>
+          <div
+            style="margin-top: 8px; display: flex; justify-content: flex-end"
+          >
+            <button type="submit" class="navbar__logout-btn">
+              Post Comment
+            </button>
+          </div>
+        </form>
+
+        <div style="border-top: 1px solid var(--border)">
+          {% for comment in comments %}
+          <article
+            style="padding: 12px 16px; border-bottom: 1px solid var(--border)"
+          >
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 8px;
+              "
+            >
+              <strong style="font-size: 0.9rem"
+                >{{ comment.author_display }}</strong
+              >
+              <span class="entry-card__date"
+                >{{ comment.published|timesince }} ago</span
+              >
+            </div>
+            <p style="margin: 8px 0 10px; white-space: pre-wrap">
+              {{ comment.comment }}
+            </p>
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                flex-wrap: wrap;
+              "
+            >
+              <form
+                method="post"
+                action="/api/comments/{{ comment.id }}/like/"
+                style="display: inline"
+              >
+                {% csrf_token %}
+                <input
+                  type="hidden"
+                  name="next"
+                  value="{{ request.get_full_path }}"
+                />
+                <button
+                  type="submit"
+                  class="entry-card__footer-btn"
+                  style="height: 32px"
+                >
+                  {% if comment.liked_by_me %}Liked{% else %}Like{% endif %} ({{comment.likes_count }})
+                </button>
+              </form>
+            </div>
+          </article>
+          {% empty %}
+          <div class="feed__empty" style="padding: 20px 16px">
+            <p>No comments yet.</p>
+          </div>
+          {% endfor %}
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

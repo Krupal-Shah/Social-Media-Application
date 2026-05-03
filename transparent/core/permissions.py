@@ -11,6 +11,7 @@ class IsApprovedAuthor(BasePermission):
     message = "Authentication as an approved local author is required."
 
     def has_permission(self, request, view):
+        """Return whether this has permission."""
         return bool(
             request.user
             and request.user.is_authenticated
@@ -27,6 +28,7 @@ class IsEntryAuthor(BasePermission):
     message = "You must be the author of this entry."
 
     def has_object_permission(self, request, view, obj):
+        """Return whether this has object permission."""
         return bool(
             request.user
             and request.user.is_authenticated
@@ -43,6 +45,7 @@ class IsOwnerOrReadOnly(BasePermission):
     """
 
     def has_object_permission(self, request, view, obj):
+        """Return whether this has object permission."""
         if request.method in SAFE_METHODS:
             return True
         return bool(

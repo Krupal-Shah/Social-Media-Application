@@ -10,7 +10,9 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import importlib.util
 import os
+import sys
 from pathlib import Path
 from dotenv import load_dotenv
 import dj_database_url
@@ -24,6 +26,9 @@ DEBUG = os.environ.get("DATABASE_URL") is None
 ALLOWED_HOSTS = ["*"]
 
 # Application definition
+HAS_DRF_SPECTACULAR = importlib.util.find_spec("drf_spectacular") is not None
+
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -41,6 +46,9 @@ INSTALLED_APPS = [
     "inbox",
     "nodes",
 ]
+
+if HAS_DRF_SPECTACULAR:
+    INSTALLED_APPS.append("drf_spectacular")
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -71,7 +79,9 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'config.wsgi.application'
-
+REST_FRAMEWORK = {}
+if HAS_DRF_SPECTACULAR:
+    REST_FRAMEWORK["DEFAULT_SCHEMA_CLASS"] = "drf_spectacular.openapi.AutoSchema"
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
@@ -86,7 +96,6 @@ if os.environ.get("DATABASE_URL") != None:
         )
     }
 else:
-    # Running locally.
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
@@ -138,9 +147,65 @@ STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-SERVICE_URL = "http://127.0.0.1:8000/api/"
+
+def _normalize_service_url(raw_url):
+    """Execute normalize service url."""
+    base = (raw_url or "http://127.0.0.1:8000/api/").strip().rstrip("/")
+    if not base.endswith("/api"):
+        base = f"{base}/api"
+    return f"{base}/"
+
+
+SERVICE_URL = _normalize_service_url(os.environ.get("SERVICE_URL"))
+
+# Respect reverse-proxy headers (e.g., Heroku) so request URLs use https + public host.
+USE_X_FORWARDED_HOST = True
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "standard": {
+            "format": "[%(asctime)s] %(levelname)s %(name)s: %(message)s",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "standard",
+        },
+    },
+    "loggers": {
+        "nodes.remote": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "inbox.views": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "entries.views": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "authors.views": {"handlers": ["console"], "level": "INFO", "propagate": False},
+    },
+}
+
+REST_FRAMEWORK.update(
+    {
+        'DEFAULT_AUTHENTICATION_CLASSES': [
+            # Allows local-user basic auth when valid, while letting node Basic
+            # Auth fall through to the per-view federation auth checks.
+            'core.authentication.NonStrictBasicAuthentication',
+
+            # Keeps your normal website login working for human users
+            'rest_framework.authentication.SessionAuthentication',
+        ],
+        'DEFAULT_PERMISSION_CLASSES': [
+            # Strictly enforces that EVERY API view requires authentication
+            'rest_framework.permissions.IsAuthenticated',
+        ],
+    }
+)

@@ -1,3 +1,5 @@
+"""Application configuration for the entries app."""
+
 from django.apps import AppConfig
 
 

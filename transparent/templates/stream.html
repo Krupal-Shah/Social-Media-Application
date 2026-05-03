@@ -14,7 +14,7 @@ right", 2026-02-28 -->
     <link rel="stylesheet" href="{% static 'base.css' %}" />
     <link rel="stylesheet" href="{% static 'stream.css' %}" />
     {% block extra_head %}{% endblock %} {% block page_scripts %}
-    <script src="{% static 'stream.min.js' %}" defer></script>
+    <script src="{% static 'stream.js' %}" type="module" defer></script>
     {% endblock %}
     <title>{% block title %}Transparent &mdash; Home{% endblock %}</title>
   </head>
@@ -92,12 +92,21 @@ right", 2026-02-28 -->
               class="entry-card__visibility entry-card__visibility--{{ entry.visibility|lower }}"
               >{{ entry.visibility }}</span
             >
+            {% if entry.is_remote %}
+            <span
+              class="entry-card__visibility"
+              style="margin-left: 8px; background: #0b7f6e; color: #fff"
+              >REMOTE</span
+            >
+            {% endif %}
           </div>
 
           {% if entry.title %}
           <h2 class="entry-card__title">{{ entry.title }}</h2>
           {% endif %} {% if entry.description %}
-          <p class="entry-card__description">{{ entry.description }}</p>
+          <p class="entry-card__description">
+            {{ entry.description|striptags }}
+          </p>
           {% endif %}
 
           <div class="entry-card__content">
@@ -107,30 +116,31 @@ right", 2026-02-28 -->
               data-markdown="{{ entry.display_text|escape }}"
             ></div>
             {% else %}
-            <p class="entry-card__content-plain">
-              {{ entry.display_text|striptags }}
-            </p>
+            <p class="entry-card__content-plain">{{ entry.display_text }}</p>
             {% endif %} {% endif %} {% if entry.display_has_image %}
             <img
               src="{{ entry.display_image_src }}"
               alt="Post image"
               class="entry-card__content-image"
             />
-            {% elif entry.display_has_gallery %}
-            <div
-              class="entry-card__carousel"
-              data-gallery="{{ entry.display_gallery_json|escape }}"
-            ></div>
             {% endif %}
           </div>
 
           <div class="entry-card__footer">
+            {% if not entry.is_remote or entry.can_remote_interact %}
             <form
               method="post"
-              action="{% if entry.liked_by_me %}/api/entries/{{ entry.id }}/unlike/{% else %}/api/entries/{{ entry.id }}/like/{% endif %}"
+              action="{% if entry.is_remote %}/api/entries/remote/like/{% else %}/api/entries/{{ entry.id }}/like/{% endif %}"
               style="display: inline"
             >
-              {% csrf_token %}
+              {% csrf_token %} {% if entry.is_remote %}
+              <input type="hidden" name="entry_fqid" value="{{ entry.fqid }}" />
+              <input
+                type="hidden"
+                name="target_author_fqid"
+                value="{{ entry.target_author_fqid|default:entry.author.id }}"
+              />
+              {% endif %}
               <input
                 type="hidden"
                 name="next"
@@ -142,12 +152,22 @@ right", 2026-02-28 -->
                     d="M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z"
                   />
                 </svg>
-                {% if entry.liked_by_me %}Unlike{% else %}Like{% endif %} ({{ entry.likes_count }})
+                Like ({{entry.likes_count }})
               </button>
             </form>
+            {% else %}
+            <span class="entry-card__footer-btn" style="cursor: default">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path
+                  d="M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z"
+                />
+              </svg>
+              Like ({{entry.likes_count }})
+            </span>
+            {% endif %} {% if not entry.is_remote %}
             <a
               class="entry-card__footer-btn"
-              href="/api/entries/{{ entry.id }}/"
+              href="{% url 'entry_detail_by_author' entry.author.id entry.id %}"
             >
               <svg viewBox="0 0 24 24" fill="currentColor">
                 <path
@@ -156,12 +176,46 @@ right", 2026-02-28 -->
               </svg>
               Comment ({{ entry.comments_count }})
             </a>
+            {% elif entry.can_remote_interact %}
+            <a
+              class="entry-card__footer-btn"
+              href="{% url 'remote_entry_detail' %}?fqid={{ entry.fqid|urlencode }}&author={{ entry.target_author_fqid|default:entry.author.id|urlencode }}"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path
+                  d="M21.99 4c0-1.1-.89-2-1.99-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4-.01-18z"
+                />
+              </svg>
+              Comment ({{ entry.comments_count }})
+            </a>
+            {% else %}
+            <span class="entry-card__footer-btn" style="cursor: default">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path
+                  d="M21.99 4c0-1.1-.89-2-1.99-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4-.01-18z"
+                />
+              </svg>
+              Comment ({{ entry.comments_count }})
+            </span>
+            {% endif %}
             <button
               class="entry-card__footer-btn"
+              data-share-url="{{ entry.share_url }}"
               onclick="
-                navigator.clipboard.writeText(window.location.origin + '/api/entries/{{ entry.id }}/');
+                if (!this.dataset.shareUrl) {
+                  this.textContent = 'No link available';
+                  setTimeout(() => {
+                    this.innerHTML =
+                      '<svg viewBox=\'0 0 24 24\' fill=\'currentColor\'><path d=\'M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z\'></path></svg> Share';
+                  }, 2000);
+                  return;
+                }
+                navigator.clipboard.writeText(this.dataset.shareUrl);
                 this.textContent = 'Link copied!';
-                setTimeout(() => { this.innerHTML = '<svg viewBox=\'0 0 24 24\' fill=\'currentColor\'><path d=\'M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z\'></path></svg> Share'; }, 2000);
+                setTimeout(() => {
+                  this.innerHTML =
+                    '<svg viewBox=\'0 0 24 24\' fill=\'currentColor\'><path d=\'M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z\'></path></svg> Share';
+                }, 2000);
               "
             >
               <svg viewBox="0 0 24 24" fill="currentColor">
@@ -283,13 +337,12 @@ right", 2026-02-28 -->
               <svg viewBox="0 0 24 24" fill="currentColor">
                 <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
               </svg>
-              <span>Add photos/videos</span>
+              <span>Add one image</span>
               <input
                 type="file"
                 id="imageFileInput"
                 name="image"
                 accept="image/*"
-                multiple
                 style="display: none"
               />
             </label>

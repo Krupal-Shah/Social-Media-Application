@@ -3,7 +3,117 @@
 {% endblock %} {% block extra_head %}
 <link rel="stylesheet" href="{% static 'profile.css' %}" />
 {% endblock %} {% block page_scripts %}
-<script src="{% static 'profile.min.js' %}" defer></script>
+<script src="{% static 'profile.js' %}" type="module" defer></script>
+<script defer>
+  document.addEventListener("DOMContentLoaded", function() {
+    /* === Data from Django (injected as JSON) === */
+    var followersData = [
+      {% for follower in followers_list %}
+      { "id": "{{ follower.id|default:'' }}", "display_name": "{{ follower.display_name|escapejs }}", "username": "{{ follower.username|default:''|escapejs }}", "profile_image": "{{ follower.profile_image|default:''|escapejs }}" }{% if not forloop.last %},{% endif %}
+      {% endfor %}
+    ];
+    var followingData = [
+      {% for followed in following_list %}
+      { "id": "{{ followed.id|default:'' }}", "display_name": "{{ followed.display_name|escapejs }}", "username": "{{ followed.username|default:''|escapejs }}", "profile_image": "{{ followed.profile_image|default:''|escapejs }}" }{% if not forloop.last %},{% endif %}
+      {% endfor %}
+    ];
+
+    /* === Build modal DOM === */
+    var backdrop = document.createElement("div");
+    backdrop.style.cssText = "display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.55);align-items:center;justify-content:center;";
+
+    var modal = document.createElement("div");
+    modal.style.cssText = "background:#fff;border-radius:12px;width:400px;max-width:calc(100vw - 40px);max-height:min(480px,calc(100vh - 80px));display:flex;flex-direction:column;box-shadow:0 12px 48px rgba(0,0,0,0.2);";
+
+    var header = document.createElement("div");
+    header.style.cssText = "display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid #dbdbdb;";
+
+    var title = document.createElement("h2");
+    title.style.cssText = "font-size:16px;font-weight:700;color:#262626;margin:0;flex:1;text-align:center;";
+    title.textContent = "Followers";
+
+    var closeBtn = document.createElement("button");
+    closeBtn.style.cssText = "width:30px;height:30px;border:none;background:none;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;";
+    closeBtn.innerHTML = '<svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:#262626;"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>';
+
+    var body = document.createElement("div");
+    body.style.cssText = "flex:1;overflow-y:auto;padding:8px 0;";
+
+    header.appendChild(title);
+    header.appendChild(closeBtn);
+    modal.appendChild(header);
+    modal.appendChild(body);
+    backdrop.appendChild(modal);
+    document.body.appendChild(backdrop);
+
+    /* === Render a list of users into the body === */
+    function renderList(users, emptyMsg) {
+      body.innerHTML = "";
+      if (!users.length) {
+        body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;padding:40px 20px;color:#8e8e8e;text-align:center;"><svg viewBox="0 0 24 24" fill="currentColor" style="width:48px;height:48px;opacity:0.4;margin-bottom:12px;"><path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg><p style="font-size:14px;margin:0;">' + emptyMsg + '</p></div>';
+        return;
+      }
+      users.forEach(function(u) {
+        var a = document.createElement("a");
+        a.href = u.id ? "/authors/" + u.id + "/" : "#";
+        a.style.cssText = "display:flex;align-items:center;gap:12px;padding:10px 16px;text-decoration:none;color:inherit;";
+        a.onmouseenter = function() { a.style.background = "#fafafa"; };
+        a.onmouseleave = function() { a.style.background = ""; };
+
+        var avatar = document.createElement("div");
+        avatar.style.cssText = "width:44px;height:44px;border-radius:50%;overflow:hidden;flex-shrink:0;background:#1877f2;display:flex;align-items:center;justify-content:center;";
+        if (u.profile_image) {
+          avatar.innerHTML = '<img src="' + u.profile_image + '" style="width:100%;height:100%;object-fit:cover;" />';
+        } else {
+          var letter = u.display_name ? u.display_name.charAt(0).toUpperCase() : "?";
+          avatar.innerHTML = '<span style="font-size:1.1rem;font-weight:600;color:#fff;">' + letter + '</span>';
+        }
+
+        var info = document.createElement("div");
+        info.style.cssText = "flex:1;min-width:0;";
+        info.innerHTML = '<div style="font-size:14px;font-weight:600;color:#262626;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + u.display_name + '</div>';
+        if (u.username) {
+          info.innerHTML += '<div style="font-size:13px;color:#8e8e8e;">@' + u.username + '</div>';
+        }
+
+        a.appendChild(avatar);
+        a.appendChild(info);
+        body.appendChild(a);
+      });
+    }
+
+    /* === Open / Close === */
+    function openModal(titleText, users, emptyMsg) {
+      title.textContent = titleText;
+      renderList(users, emptyMsg);
+      backdrop.style.display = "flex";
+      document.body.style.overflow = "hidden";
+    }
+
+    function closeModal() {
+      backdrop.style.display = "none";
+      document.body.style.overflow = "";
+    }
+
+    /* === Wire up clicks on the stat counts === */
+    var openFollowers = document.getElementById("openFollowersModal");
+    var openFollowing = document.getElementById("openFollowingModal");
+
+    if (openFollowers) {
+      openFollowers.addEventListener("click", function() { openModal("Followers", followersData, "No followers yet"); });
+    }
+    if (openFollowing) {
+      openFollowing.addEventListener("click", function() { openModal("Following", followingData, "Not following anyone yet"); });
+    }
+
+    closeBtn.addEventListener("click", closeModal);
+    backdrop.addEventListener("click", function(e) { if (e.target === backdrop) closeModal(); });
+    document.addEventListener("keydown", function(e) { if (e.key === "Escape" && backdrop.style.display === "flex") closeModal(); });
+
+    /* Stop clicks inside the modal from closing it */
+    modal.addEventListener("click", function(e) { e.stopPropagation(); });
+  });
+</script>
 {% endblock %} {% block main %}
 <main class="profile-page">
   {% if messages %}
@@ -57,10 +167,20 @@
         <div class="profile-stat">
           <strong>{{ entries|length }}</strong> posts
         </div>
-        <div class="profile-stat">
+        <div
+          class="profile-stat profile-stat--clickable"
+          id="openFollowersModal"
+          role="button"
+          tabindex="0"
+        >
           <strong>{{ followers_count }}</strong> followers
         </div>
-        <div class="profile-stat">
+        <div
+          class="profile-stat profile-stat--clickable"
+          id="openFollowingModal"
+          role="button"
+          tabindex="0"
+        >
           <strong>{{ following_count }}</strong> following
         </div>
       </div>
@@ -85,17 +205,49 @@
 
   <!-- Follow Requests Button -->
   {% if pending_count > 0 %}
-  <div style="max-width: 935px; margin: 0 auto 16px; padding: 0 12px;">
-    <a href="/profile/follow-requests/" style="display: flex; align-items: center; justify-content: space-between; background: #fff; border: 1px solid #dbdbdb; border-radius: 8px; padding: 14px 16px; text-decoration: none; color: #262626; transition: background 0.15s;">
-      <div style="display: flex; align-items: center; gap: 10px;">
-        <svg viewBox="0 0 24 24" fill="#1877f2" style="width: 22px; height: 22px;">
-          <path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+  <div style="max-width: 935px; margin: 0 auto 16px; padding: 0 12px">
+    <a
+      href="/profile/follow-requests/"
+      style="
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: #fff;
+        border: 1px solid #dbdbdb;
+        border-radius: 8px;
+        padding: 14px 16px;
+        text-decoration: none;
+        color: #262626;
+        transition: background 0.15s;
+      "
+    >
+      <div style="display: flex; align-items: center; gap: 10px">
+        <svg
+          viewBox="0 0 24 24"
+          fill="#1877f2"
+          style="width: 22px; height: 22px"
+        >
+          <path
+            d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
+          />
         </svg>
-        <span style="font-size: 0.9375rem; font-weight: 600;">Follow Requests</span>
-        <span style="background: #e74c3c; color: white; font-size: 0.75rem; padding: 2px 8px; border-radius: 12px; font-weight: 700;">{{ pending_count }}</span>
+        <span style="font-size: 0.9375rem; font-weight: 600"
+          >Follow Requests</span
+        >
+        <span
+          style="
+            background: #e74c3c;
+            color: white;
+            font-size: 0.75rem;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-weight: 700;
+          "
+          >{{ pending_count }}</span
+        >
       </div>
-      <svg viewBox="0 0 24 24" fill="#8e8e8e" style="width: 20px; height: 20px;">
-        <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/>
+      <svg viewBox="0 0 24 24" fill="#8e8e8e" style="width: 20px; height: 20px">
+        <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z" />
       </svg>
     </a>
   </div>
@@ -123,22 +275,7 @@
       tabindex="0"
       aria-label="View post: {{ entry.title|default:'Untitled' }}"
     >
-      {% if entry.display_has_gallery %}
-      <div class="grid-cell__gallery-badge" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="currentColor">
-          <path
-            d="M2 6H0v5h.01L0 20c0 1.1.9 2 2 2h18v-2H2V6zm20-2h-8l-2-2H6c-1.1 0-1.99.9-1.99 2L4 16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-5 9l-5 3.19V13H7V9h5V5.81L17 9v4z"
-          />
-        </svg>
-      </div>
-      <div
-        class="grid-cell__text {% cycle 'tile-palette-0' 'tile-palette-1' 'tile-palette-2' 'tile-palette-3' 'tile-palette-4' 'tile-palette-5' 'tile-palette-6' 'tile-palette-7' %}"
-        data-gallery-thumb="1"
-        data-gallery="{{ entry.display_gallery_json|escape }}"
-        aria-hidden="true"
-      ></div>
-
-      {% elif entry.display_has_image %}
+      {% if entry.display_has_image %}
       <img
         class="grid-cell__img"
         src="{{ entry.display_image_src }}"
@@ -244,12 +381,6 @@
           {{ entry.display_text }}
         </p>
 
-        <div
-          class="overlay-gallery js-view-gallery"
-          data-gallery="{{ entry.display_gallery_json|escape }}"
-          style="display: none"
-        ></div>
-
         <img
           class="overlay-content-image js-view-image"
           src="{{ entry.display_image_src }}"
@@ -263,7 +394,7 @@
     <div class="store-view-footer">
       {% if entry.visibility != "DELETED" %}
       <a
-        href="/api/entries/{{ entry.id }}/"
+        href="{% url 'entry_detail_by_author' entry.author.id entry.id %}"
         class="overlay-btn overlay-btn--secondary"
         target="_blank"
       >
@@ -330,12 +461,11 @@
             <svg viewBox="0 0 24 24" fill="currentColor">
               <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
             </svg>
-            <span>Add photos (up to 5)</span>
+            <span>Add one image</span>
             <input
               type="file"
               name="image"
               accept="image/*"
-              multiple
               class="edit-img-input"
               style="display: none"
             />
@@ -347,7 +477,7 @@
           ></div>
         </div>
 
-        {% if entry.display_text or not entry.display_has_image and not entry.display_has_gallery %}
+        {% if entry.display_text or not entry.display_has_image %}
         <div class="edit-form__group">
           <label class="edit-form__label" for="edit-content-{{ entry.id }}"
             >Content</label
@@ -389,19 +519,37 @@
           >
             <option
               value="PUBLIC"
-              {% if entry.visibility == "PUBLIC" %}selected{% endif %}
+              {%
+              if
+              entry.visibility=""
+              ="PUBLIC"
+              %}selected{%
+              endif
+              %}
             >
               &#127760; Public
             </option>
             <option
               value="FRIENDS"
-              {% if entry.visibility == "FRIENDS" %}selected{% endif %}
+              {%
+              if
+              entry.visibility=""
+              ="FRIENDS"
+              %}selected{%
+              endif
+              %}
             >
               &#128101; Friends
             </option>
             <option
               value="UNLISTED"
-              {% if entry.visibility == "UNLISTED" %}selected{% endif %}
+              {%
+              if
+              entry.visibility=""
+              ="UNLISTED"
+              %}selected{%
+              endif
+              %}
             >
               &#128279; Unlisted
             </option>

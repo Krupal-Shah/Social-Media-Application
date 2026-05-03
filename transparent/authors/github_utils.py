@@ -1,3 +1,5 @@
+"""Utilities and logic for github_utils."""
+
 import requests
 from entries.models import Entry
 

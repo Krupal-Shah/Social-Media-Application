@@ -1,3 +1,5 @@
+"""URL routing for the authors app."""
+
 from django.urls import path, re_path
 from . import views
 from entries.views import (
@@ -17,13 +19,30 @@ from entries.views import (
     EntryListCreateAPIView,
     LikeByFQIDAPIView,
 )
+from inbox.views import InboxAPIView
 
 _UUID = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 
-urlpatterns = [
-    # Browser routes
+# ── Browser (HTML) routes ────────────────────────────────────────────────────
+browser_urlpatterns = [
     path("accounts/register/", views.register, name="register"),
     path("authors/", views.author_list, name="author_list"),
+    path("authors/<uuid:author_id>/approve-signup/",
+         views.approve_signup, name="approve_signup"),
+    path("authors/<uuid:author_id>/reject-signup/",
+         views.reject_signup, name="reject_signup"),
+    path("authors/<uuid:author_id>/toggle-staff/",
+         views.toggle_author_staff, name="toggle_author_staff"),
+    path("authors/<uuid:author_id>/toggle-active/",
+         views.toggle_author_active, name="toggle_author_active"),
+    path("authors/<uuid:author_id>/delete-account/",
+         views.delete_author_account, name="delete_author_account"),
+    path("authors/remote-follow/", views.follow_remote_author,
+         name="follow_remote_author"),
+    path("authors/remote-unfollow/", views.unfollow_remote_author,
+         name="unfollow_remote_author"),
+    path("authors/remote-profile/", views.remote_author_profile,
+         name="remote_author_profile"),
     path("authors/<uuid:author_id>/follow/",
          views.follow_author, name="follow_author"),
     path("authors/<uuid:author_id>/unfollow/",
@@ -32,13 +51,20 @@ urlpatterns = [
          views.approve_follow, name="approve_follow"),
     path("authors/<uuid:author_id>/deny/",
          views.deny_follow, name="deny_follow"),
+    path("authors/remote-approve/",
+         views.approve_follow_by_fqid, name="approve_follow_by_fqid"),
+    path("authors/remote-deny/",
+         views.deny_follow_by_fqid, name="deny_follow_by_fqid"),
     path("authors/<uuid:author_id>/", views.author_profile, name="author_profile"),
     path("profile/edit/", views.edit_profile, name="edit_profile"),
+]
 
-    # REST API: Author list (GET)
+# ── REST API routes ──────────────────────────────────────────────────────────
+api_urlpatterns = [
+    # Author list (GET)
     path("api/authors/", views.AuthorListAPIView.as_view(), name="author_list_api"),
 
-    # REST API: Entries (under an author)
+    # Entries (under an author)
     path(
         "api/authors/<uuid:author_fqid>/entries/",
         EntryListCreateAPIView.as_view(),
@@ -120,7 +146,7 @@ urlpatterns = [
         name="like_by_fqid",
     ),
 
-    # REST API: Following / Followers – detail with percent-encoded FQID
+    # Following / Followers – detail with percent-encoded FQID
     re_path(
         rf"^api/authors/(?P<author_fqid>{_UUID})/following/(?P<foreign_fqid>.+)$",
         views.FollowingDetailAPIView.as_view(),
@@ -132,7 +158,7 @@ urlpatterns = [
         name="follower_detail",
     ),
 
-    # REST API: Following / Followers – list endpoints (no trailing FQID)
+    # Following / Followers – list endpoints (no trailing FQID)
     path(
         "api/authors/<uuid:author_fqid>/following",
         views.FollowingListAPIView.as_view(),
@@ -144,7 +170,7 @@ urlpatterns = [
         name="followers_list",
     ),
 
-    # REST API: Follow requests & Inbox
+    # Follow requests & Inbox
     path(
         "api/authors/<uuid:author_fqid>/follow_requests",
         views.FollowRequestsAPIView.as_view(),
@@ -152,18 +178,26 @@ urlpatterns = [
     ),
     path(
         "api/authors/<uuid:author_fqid>/inbox",
-        views.InboxAPIView.as_view(),
-        name="inbox",
+        InboxAPIView.as_view(),
+        name="author_inbox_no_slash",
+    ),
+    path(
+        "api/authors/<uuid:author_fqid>/inbox/",
+        InboxAPIView.as_view(),
+        name="author_inbox",
     ),
 
-    # REST API: Single author by serial (GET / PUT)
+    # Single author by serial (GET / PUT)
     path(
         "api/authors/<uuid:author_fqid>/",
         views.AuthorDetailAPIView.as_view(),
         name="author_detail_api",
     ),
 
-    # REST API: Author by FQID (catch-all – must be last)
+    # Author by FQID (catch-all – must be last)
     re_path(r"^api/authors/(?P<fqid>.+)$", views.AuthorFQIDAPIView.as_view(),
             name="author_by_fqid"),
 ]
+
+# Combined – used by the root include in config/urls.py
+urlpatterns = browser_urlpatterns + api_urlpatterns

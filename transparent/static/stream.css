@@ -415,6 +415,16 @@ right", 2026-02-28 */
     padding: 4px 8px;
 }
 
+.entry-card__footer > form {
+    flex: 1;
+    display: flex;
+    margin: 0;
+}
+
+.entry-card__footer > form > .entry-card__footer-btn {
+    width: 100%;
+}
+
 .entry-card__footer-btn {
     flex: 1;
     display: flex;

@@ -1,14 +1,17 @@
 /* Profile overlay + grid rendering + AJAX edit */
-import { marked } from "marked";
-import { buildCarousel } from "./ui/carousel.js";
-import DOMPurify from "dompurify";
+import { marked } from "https://cdn.jsdelivr.net/npm/marked@17.0.3/lib/marked.esm.js";
+import DOMPurify from "https://cdn.jsdelivr.net/npm/dompurify@3.3.3/+esm";
 
 (function () {
   "use strict";
   // Enable navbar dropdown on profile page (profile overrides stream.min.js)
 
-  function qs(sel, root) { return (root || document).querySelector(sel); }
-  function qsa(sel, root) { return Array.from((root || document).querySelectorAll(sel)); }
+  function qs(sel, root) {
+    return (root || document).querySelector(sel);
+  }
+  function qsa(sel, root) {
+    return Array.from((root || document).querySelectorAll(sel));
+  }
 
   function getCookie(name) {
     var value = "; " + document.cookie;
@@ -17,86 +20,45 @@ import DOMPurify from "dompurify";
     return "";
   }
 
-  function parseGallery(galleryStr) {
-    if (!galleryStr) return [];
-    try {
-      return JSON.parse(galleryStr);
-    } catch (e) {
-      return [];
-    }
-  }
-
   // Mirrors _annotate_entry logic from views.py
   function annotateEntry(contentType, content) {
     var ct = contentType || "";
-    var hasGallery = ct.indexOf("image/gallery") !== -1;
-    var hasImage = ct.indexOf("image/") !== -1;
-    var hasText = ct.indexOf("text/") !== -1;
+    var hasImage = ct.indexOf(";base64") !== -1;
     var isMarkdown = ct.indexOf("text/markdown") !== -1;
 
     var result = {
-      hasGallery: hasGallery,
-      hasImage: hasImage && !hasGallery,
+      hasImage: hasImage,
       isMarkdown: isMarkdown,
       imageSrc: "",
-      galleryJson: "[]",
-      text: ""
+      text: "",
     };
 
-    if (hasImage && hasText) {
-      var data = {};
-      try { data = JSON.parse(content); } catch (e) {}
-      result.text = data.text || "";
-      if (hasGallery) {
-        result.galleryJson = JSON.stringify(data.gallery || []);
-      } else {
-        var imgType = ct.split("/text/")[0];
-        result.imageSrc = "data:" + imgType + ";base64," + (data.image || "");
-      }
-    } else if (hasGallery) {
-      result.galleryJson = content;
-    } else if (hasImage) {
-      result.imageSrc = "data:" + ct + ";base64," + content;
+    if (hasImage) {
+      var mime = ct.replace(";base64", "");
+      if (mime === "application") mime = "application/octet-stream";
+      result.imageSrc = "data:" + mime + ";base64," + (content || "");
     } else {
-      result.text = content;
+      result.text = content || "";
     }
 
     return result;
   }
 
-  function hydrateGalleryThumbs() {
-    qsa("[data-gallery-thumb]").forEach(function (node) {
-      if (node.dataset.hydrated === "1") return;
-      var items = parseGallery(node.getAttribute("data-gallery"));
-      if (!items.length) return;
-
-      var img = document.createElement("img");
-      img.className = "grid-cell__img";
-      img.loading = "lazy";
-      img.alt = "Gallery";
-      img.src = "data:" + items[0].type + ";base64," + items[0].data;
-      node.replaceWith(img);
-      // leave the badge as-is
-    });
-  }
-
   // Determine visibility of view elements by inspecting actual content,
   // not the raw content_type string, so combined types work correctly.
   function setStoreViewMode(containerEl) {
-    var gallery = qs(".js-view-gallery", containerEl);
     var image = qs(".js-view-image", containerEl);
     var markdown = qs(".js-view-markdown", containerEl);
     var plain = qs(".js-view-plain", containerEl);
 
-    var galleryData = gallery ? (gallery.getAttribute("data-gallery") || "") : "";
-    var imageSrc = image ? (image.getAttribute("src") || "") : "";
-    var mdData = markdown ? (markdown.getAttribute("data-markdown") || "") : "";
+    var imageSrc = image ? image.getAttribute("src") || "" : "";
+    var mdData = markdown ? markdown.getAttribute("data-markdown") || "" : "";
     var plainText = plain ? (plain.textContent || "").trim() : "";
 
-    if (gallery) gallery.style.display = (galleryData && galleryData.length > 2) ? "grid" : "none";
-    if (image) image.style.display = imageSrc.startsWith("data:") ? "block" : "none";
+    if (image)
+      image.style.display = imageSrc.startsWith("data:") ? "block" : "none";
     if (markdown) markdown.style.display = mdData ? "block" : "none";
-    if (plain) plain.style.display = (!mdData && plainText) ? "block" : "none";
+    if (plain) plain.style.display = !mdData && plainText ? "block" : "none";
   }
 
   /* ============================================================
@@ -136,28 +98,16 @@ import DOMPurify from "dompurify";
       setStoreViewMode(bodyEl);
 
       // markdown – render after visibility is set
-      qsa(".overlay-content-markdown[data-markdown]", bodyEl).forEach(function (el) {
-        var md = el.getAttribute("data-markdown") || "";
-        if (md) {
-          // el.innerHTML = marked.parse(md);
-          el.innerHTML = DOMPurify.sanitize(marked.parse(md));
-          el.removeAttribute("data-markdown");
-        }
-      });
-
-      // gallery
-      qsa(".overlay-gallery[data-gallery]", bodyEl).forEach(function (wrap) {
-        var items = parseGallery(wrap.getAttribute("data-gallery"));
-        var images = items
-          .filter(function (item) { return item && item.type && item.data; })
-          .map(function (item) {
-            return {
-              src: "data:" + item.type + ";base64," + item.data,
-              alt: "Image",
-            };
-          });
-        buildCarousel(images, wrap);
-      });
+      qsa(".overlay-content-markdown[data-markdown]", bodyEl).forEach(
+        function (el) {
+          var md = el.getAttribute("data-markdown") || "";
+          if (md) {
+            // el.innerHTML = marked.parse(md);
+            el.innerHTML = DOMPurify.sanitize(marked.parse(md));
+            el.removeAttribute("data-markdown");
+          }
+        },
+      );
     }
 
     if (mode === "edit") {
@@ -204,8 +154,7 @@ import DOMPurify from "dompurify";
     var uploadLabel = qs(".edit-img-upload-area", bodyEl);
     if (!toggle || !section || !fileInput) return;
 
-    var MAX = 5;
-    var selectedFiles = [];
+    var selectedFile = null;
 
     // Make the label click open the file picker
     if (uploadLabel) {
@@ -214,49 +163,40 @@ import DOMPurify from "dompurify";
       });
     }
 
-    function syncFiles() {
-      var dt = new DataTransfer();
-      selectedFiles.forEach(function (f) { dt.items.add(f); });
-      fileInput.files = dt.files;
-    }
-
     function refreshUI() {
-      if (!selectedFiles.length) {
+      if (!selectedFile) {
         indicator.style.display = "none";
         preview.style.display = "none";
         preview.innerHTML = "";
         return;
       }
-      var atMax = selectedFiles.length === MAX;
-      indicator.textContent = selectedFiles.length + " image" + (selectedFiles.length > 1 ? "s" : "") + " selected" + (atMax ? " — maximum reached" : "");
+      indicator.textContent = "1 image selected";
       indicator.style.display = "block";
-      preview.innerHTML = selectedFiles.map(function (f) {
-        return '<img src="' + URL.createObjectURL(f) + '" style="width:58px;height:58px;object-fit:cover;border-radius:4px">';
-      }).join("");
+      preview.innerHTML =
+        '<img src="' +
+        URL.createObjectURL(selectedFile) +
+        '" style="width:58px;height:58px;object-fit:cover;border-radius:4px">';
       preview.style.display = "flex";
     }
 
     toggle.addEventListener("change", function () {
       section.style.display = toggle.checked ? "block" : "none";
       if (!toggle.checked) {
-        selectedFiles = [];
+        selectedFile = null;
         fileInput.value = "";
         refreshUI();
       }
     });
 
     fileInput.addEventListener("change", function () {
-      Array.from(fileInput.files).forEach(function (f) {
-        if (selectedFiles.length >= MAX) return;
-        var dup = selectedFiles.some(function (s) { return s.name === f.name && s.size === f.size; });
-        if (!dup) selectedFiles.push(f);
-      });
-      syncFiles();
+      var files = Array.from(fileInput.files || []);
+      selectedFile = files.length ? files[0] : null;
       refreshUI();
     });
   }
 
-  function attachFooterListeners() {    qsa("[data-action]", footerEl).forEach(function (btn) {
+  function attachFooterListeners() {
+    qsa("[data-action]", footerEl).forEach(function (btn) {
       btn.addEventListener("click", function () {
         var action = btn.getAttribute("data-action");
         var id = btn.getAttribute("data-id");
@@ -274,14 +214,18 @@ import DOMPurify from "dompurify";
     if (!badge) return;
 
     badge.textContent = visibility;
-    badge.className = "grid-cell__vis grid-cell__vis--" + String(visibility || "").toLowerCase();
+    badge.className =
+      "grid-cell__vis grid-cell__vis--" +
+      String(visibility || "").toLowerCase();
   }
 
   function setOverlayVisibility(bodyRoot, visibility) {
     var badge = qs(".overlay-vis-badge", bodyRoot);
     if (!badge) return;
     badge.textContent = visibility;
-    badge.className = "overlay-vis-badge overlay-vis-badge--" + String(visibility || "").toLowerCase();
+    badge.className =
+      "overlay-vis-badge overlay-vis-badge--" +
+      String(visibility || "").toLowerCase();
   }
 
   function updateGridCellFromJson(data) {
@@ -294,7 +238,7 @@ import DOMPurify from "dompurify";
 
     // Update markdown badge
     var mdBadge = qs(".tile-md-badge", cell);
-    if (ann.isMarkdown && !ann.hasImage && !ann.hasGallery) {
+    if (ann.isMarkdown && !ann.hasImage) {
       if (!mdBadge) {
         mdBadge = document.createElement("div");
         mdBadge.className = "tile-md-badge";
@@ -351,18 +295,19 @@ import DOMPurify from "dompurify";
     var viewVis = qs(".js-view-visibility", store);
     if (viewVis) {
       viewVis.textContent = data.visibility;
-      viewVis.className = "overlay-vis-badge js-view-visibility overlay-vis-badge--" + String(data.visibility || "").toLowerCase();
+      viewVis.className =
+        "overlay-vis-badge js-view-visibility overlay-vis-badge--" +
+        String(data.visibility || "").toLowerCase();
     }
 
     // Content rendering nodes (store view)
-    var galleryNode = qs(".js-view-gallery", store);
     var imgNode = qs(".js-view-image", store);
     var mdNode = qs(".js-view-markdown", store);
     var plainNode = qs(".js-view-plain", store);
 
-    if (galleryNode) galleryNode.setAttribute("data-gallery", ann.galleryJson);
     if (imgNode) imgNode.src = ann.imageSrc || "";
-    if (mdNode) mdNode.setAttribute("data-markdown", ann.isMarkdown ? ann.text : "");
+    if (mdNode)
+      mdNode.setAttribute("data-markdown", ann.isMarkdown ? ann.text : "");
     if (plainNode) plainNode.textContent = ann.text;
   }
 
@@ -377,9 +322,9 @@ import DOMPurify from "dompurify";
       body: fd,
       headers: {
         "X-Requested-With": "XMLHttpRequest",
-        "X-CSRFToken": getCookie("csrftoken")
+        "X-CSRFToken": getCookie("csrftoken"),
       },
-      credentials: "same-origin"
+      credentials: "same-origin",
     })
       .then(function (res) {
         return res.json().then(function (json) {
@@ -388,7 +333,11 @@ import DOMPurify from "dompurify";
       })
       .then(function (result) {
         if (!result.ok) {
-          alert((result.json && result.json.error) ? result.json.error : "Could not save changes.");
+          alert(
+            result.json && result.json.error
+              ? result.json.error
+              : "Could not save changes.",
+          );
           return;
         }
 
@@ -408,15 +357,15 @@ import DOMPurify from "dompurify";
   /* ============================================================
      Wiring
   ============================================================ */
-  hydrateGalleryThumbs();
-
   // Render any [data-markdown] elements already on the page,
   // but skip elements inside the hidden store (their data-markdown must
   // stay intact so the overlay can read it when a post is opened).
   qsa("[data-markdown]").forEach(function (el) {
     if (el.closest("#entryStore")) return;
     // el.innerHTML = marked.parse(el.getAttribute("data-markdown") || "");
-    el.innerHTML = DOMPurify.sanitize(marked.parse(el.getAttribute("data-markdown") || ""));
+    el.innerHTML = DOMPurify.sanitize(
+      marked.parse(el.getAttribute("data-markdown") || ""),
+    );
     el.removeAttribute("data-markdown");
   });
 
@@ -437,7 +386,10 @@ import DOMPurify from "dompurify";
   backdrop.addEventListener("click", closeOverlay);
 
   document.addEventListener("keydown", function (e) {
-    if (e.key === "Escape" && overlay.classList.contains("entry-overlay--open")) {
+    if (
+      e.key === "Escape" &&
+      overlay.classList.contains("entry-overlay--open")
+    ) {
       closeOverlay();
     }
   });

@@ -1,6 +1,7 @@
+"""Data models for the interactions app."""
+
 from django.db import models
 import uuid
-from django.conf import settings
 
 
 class Comment(models.Model):

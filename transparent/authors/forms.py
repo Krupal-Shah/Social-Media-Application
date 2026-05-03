@@ -1,3 +1,5 @@
+"""Utilities and logic for forms."""
+
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
 from .models import Author
@@ -24,12 +26,21 @@ class RegisterForm(UserCreationForm):
         fields = ("username", "display_name", "email",
                   "github", "password1", "password2")
 
-    def save(self, commit=True):
+    def save(self, commit=True, request=None):
+        """Execute save."""
         user = super().save(commit=False)
         user.display_name = self.cleaned_data["display_name"]
         user.email = self.cleaned_data.get("email", "")
         user.github = self.cleaned_data.get("github", "")
-        user.approved = False 
+        user.approved = False
+
+        if request is not None:
+            service_url = request.build_absolute_uri("/api/")
+            if not service_url.endswith("/"):
+                service_url = f"{service_url}/"
+            user.host = service_url
+            user.fqid = f"{service_url}authors/{user.id}"
+
         if commit:
             user.save()
         return user

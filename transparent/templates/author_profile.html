@@ -7,7 +7,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="{% static 'base.css' %}" />
     <link rel="stylesheet" href="{% static 'stream.css' %}" />
-    <script src="{% static 'entry_detail.min.js' %}" defer></script>
+    <script src="{% static 'entry_detail.js' %}" type="module" defer></script>
     <title>Transparent &mdash; {{ author.display_name }}</title>
   </head>
   <body>
@@ -156,7 +156,7 @@
       </h3>
 
       {% for entry in entries %}
-      <article class="entry-card">
+      <article class="entry-card" style="margin-bottom: 14px">
         <div class="entry-card__header">
           <div class="entry-card__avatar">
             {% if author.profile_image %}
@@ -186,9 +186,22 @@
         {% endif %}
 
         <div class="entry-card__content">
+          {% if entry.display_text %} {% if entry.display_is_markdown %}
+          <div
+            class="entry-card__content-markdown"
+            data-markdown="{{ entry.display_text|escape }}"
+          ></div>
+          {% else %}
           <p class="entry-card__content-plain">
-            {{ entry.content|truncatechars:300 }}
+            {{ entry.display_text|striptags }}
           </p>
+          {% endif %} {% endif %} {% if entry.display_has_image %}
+          <img
+            src="{{ entry.display_image_src }}"
+            alt="Post image"
+            class="entry-card__content-image"
+          />
+          {% endif %}
         </div>
       </article>
       {% empty %}

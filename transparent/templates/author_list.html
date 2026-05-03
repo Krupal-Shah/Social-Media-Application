@@ -15,6 +15,14 @@
     {% include "ui/_header.html" %}
 
     <main class="feed-layout">
+      {% if messages %}
+      {% for message in messages %}
+      <div class="feed__empty" style="margin-bottom: 12px">
+        <p>{{ message }}</p>
+      </div>
+      {% endfor %}
+      {% endif %}
+
       <h2
         style="
           font-size: 1.1rem;
@@ -27,15 +35,25 @@
       </h2>
 
       {% for author in authors %}
-      <a href="/authors/{{ author.pk }}/" style="text-decoration: none">
-        <div
-          class="entry-card"
+      <div
+        class="entry-card"
+        style="
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 12px 16px;
+          margin-bottom: 8px;
+          justify-content: space-between;
+        "
+      >
+        <a
+          href="/authors/{{ author.pk }}/"
           style="
+            text-decoration: none;
+            color: inherit;
             display: flex;
             align-items: center;
             gap: 12px;
-            padding: 12px 16px;
-            margin-bottom: 8px;
           "
         >
           <div class="entry-card__avatar">
@@ -62,13 +80,221 @@
               @{{ author.username }}
             </div>
           </div>
+        </a>
+        {% if request.user.is_staff %}
+        <div style="display: flex; gap: 8px">
+          <form
+            method="post"
+            action="{% url 'delete_author_account' author.id %}"
+          >
+            {% csrf_token %}
+            <button
+              type="submit"
+              style="
+                background: #c0392b;
+                color: #fff;
+                border: none;
+                border-radius: 6px;
+                padding: 6px 12px;
+                font-size: 0.8rem;
+                font-weight: 600;
+              "
+            >
+              Delete
+            </button>
+          </form>
         </div>
-      </a>
+        {% endif %}
+      </div>
       {% empty %}
       <div class="feed__empty">
         <p>No other authors on this node yet.</p>
       </div>
-      {% endfor %}
+      {% endfor %} {% if request.user.is_staff %}
+      <h2
+        style="
+          font-size: 1.1rem;
+          font-weight: 700;
+          color: var(--text-primary);
+          margin: 24px 0 12px;
+        "
+      >
+        Pending Signups
+      </h2>
+      {% for pending in pending_signups %}
+      <div
+        class="entry-card"
+        style="
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 12px 16px;
+          margin-bottom: 8px;
+          justify-content: space-between;
+        "
+      >
+        <div>
+          <div
+            style="
+              font-weight: 600;
+              font-size: 0.9375rem;
+              color: var(--text-primary);
+            "
+          >
+            {{ pending.display_name }}
+          </div>
+          <div style="font-size: 0.75rem; color: var(--text-secondary)">
+            @{{ pending.username }}
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px">
+          <form method="post" action="{% url 'approve_signup' pending.id %}">
+            {% csrf_token %}
+            <button
+              type="submit"
+              style="
+                background: #27ae60;
+                color: #fff;
+                border: none;
+                border-radius: 6px;
+                padding: 6px 12px;
+                font-size: 0.8rem;
+                font-weight: 600;
+              "
+            >
+              Approve
+            </button>
+          </form>
+          <form method="post" action="{% url 'reject_signup' pending.id %}">
+            {% csrf_token %}
+            <button
+              type="submit"
+              style="
+                background: #c0392b;
+                color: #fff;
+                border: none;
+                border-radius: 6px;
+                padding: 6px 12px;
+                font-size: 0.8rem;
+                font-weight: 600;
+              "
+            >
+              Reject
+            </button>
+          </form>
+        </div>
+      </div>
+      {% empty %}
+      <div class="feed__empty">
+        <p>No pending signups.</p>
+      </div>
+      {% endfor %} {% endif %} {% if remote_authors %}
+      <h2
+        style="
+          font-size: 1.1rem;
+          font-weight: 700;
+          color: var(--text-primary);
+          margin: 24px 0 12px;
+        "
+      >
+        Remote Authors
+      </h2>
+      {% for author in remote_authors %}
+      <div
+        class="entry-card"
+        style="
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 12px 16px;
+          margin-bottom: 8px;
+          justify-content: space-between;
+        "
+      >
+        <a
+          href="{% url 'remote_author_profile' %}?fqid={{ author.id|urlencode }}"
+          style="
+            text-decoration: none;
+            color: inherit;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+          "
+        >
+          <div class="entry-card__avatar">
+            {% if author.profileImage %}
+            <img
+              src="{{ author.profileImage }}"
+              alt="{{ author.displayName }}"
+            />
+            {% else %}
+            <span>{{ author.displayName|first|upper }}</span>
+            {% endif %}
+          </div>
+          <div>
+            <div
+              style="
+                font-weight: 600;
+                font-size: 0.9375rem;
+                color: var(--text-primary);
+              "
+            >
+              {{ author.displayName }}
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-secondary)">
+              {{ author.host }}
+            </div>
+          </div>
+        </a>
+        <form method="post" action="/authors/remote-follow/">
+          {% csrf_token %}
+          <input type="hidden" name="author_fqid" value="{{ author.id }}" />
+          {% if author.follow_status == "following" %}
+          <button
+            type="button"
+            disabled
+            style="
+              background: #e4e6eb;
+              color: var(--text-primary);
+              border: none;
+              border-radius: 6px;
+              padding: 6px 14px;
+              font-size: 0.8rem;
+              font-weight: 600;
+              cursor: default;
+            "
+          >
+            Following
+          </button>
+          {% elif author.follow_status == "pending" %}
+          <button
+            type="button"
+            disabled
+            style="
+              background: #e4e6eb;
+              color: var(--text-secondary);
+              border: none;
+              border-radius: 6px;
+              padding: 6px 14px;
+              font-size: 0.8rem;
+              font-weight: 600;
+              cursor: not-allowed;
+            "
+          >
+            Request Sent
+          </button>
+          {% else %}
+          <button
+            type="submit"
+            class="overlay-btn overlay-btn--primary"
+            style="padding: 6px 14px; font-size: 0.8rem"
+          >
+            Follow
+          </button>
+          {% endif %}
+        </form>
+      </div>
+      {% endfor %} {% endif %}
     </main>
   </body>
 </html>

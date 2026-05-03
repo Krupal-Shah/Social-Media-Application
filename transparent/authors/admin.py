@@ -1,3 +1,5 @@
+"""Django admin registration for the authors app."""
+
 from django.contrib import admin
 from .models import Author
 from django.contrib.auth.admin import UserAdmin
