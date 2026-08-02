@@ -1,5 +1,7 @@
 # Transparent — Distributed Social Network Node
 
+![Demo](https://github.com/user-attachments/assets/1aa960d0-5903-48b9-9d4f-f08bff529a90)
+
 ## Overview
 Transparent is a simplified distributed social networking platform built for CMPUT 404. It follows a decentralized, peer-to-peer model inspired by early federated systems such as Diaspora and modern protocols like ActivityPub, but intentionally reduces complexity for educational purposes.
 
